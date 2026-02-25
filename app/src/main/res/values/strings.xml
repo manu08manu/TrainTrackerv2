@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Train Tracker</string>
+    <string name="app_title">🚂 Train Tracker</string>
+    <string name="find_nearest_station">Find nearest station</string>
+    <string name="toggle_dark_mode">Toggle dark mode</string>
+    <string name="search_hint">e.g. London Liverpool Street, LST</string>
+    <string name="btn_favourite">Favourite</string>
+    <string name="btn_search">Search</string>
+    <string name="label_favourites">Favourites:</string>
+    <string name="show_freight">Not in normal passenger service</string>
+    <string name="service_cancelled_banner">⚠ This service is CANCELED</string>
+    <string name="label_calling_points">Calling points</string>
+    <string name="btn_simple">Simple</string>
+    <string name="btn_detailed">Detailed</string>
+    <string name="no_calling_points">No calling point data available</string>
+    <string name="station_display">%1$s  (%2$s)</string>
+    <string name="live_indicator">● LIVE</string>
+    <string name="connecting_indicator">● Connecting…</string>
+    <string name="feed_error_indicator">● Feed error</string>
+    <string name="no_services_found">No services found</string>
+    <string name="error_prefix">⚠ %1$s</string>
+    <string name="board_header">%1$s: %2$s  ·  %3$s</string>
+    <string name="nearest_station">Nearest: %1$s</string>
+    <string name="permission_location_needed">Location permission needed to find nearest station</string>
+    <string name="no_station_found">No station found nearby</string>
+    <string name="location_unavailable">Could not get location — try moving outdoors</string>
+    <string name="location_not_granted">Location permission not granted</string>
+    <string name="toc_logo_description">Operator logo</string>
+
+    <!-- Filters -->
+    <string name="filter_calling_at">Calling at…</string>
+    <string name="filter_calling_at_active">Calling at: %1$s</string>
+    <string name="filter_operator">All operators</string>
+    <string name="filter_operator_active">%1$s only</string>
+    <string name="time_now">Now</string>
+    <string name="time_earlier">Earlier</string>
+    <string name="time_later">Later</string>
+    <string name="time_offset_plus">+%1$d min</string>
+    <string name="time_offset_minus">-%1$d min</string>
+    <string name="dialog_calling_at_title">Filter: calling at</string>
+    <string name="dialog_operator_title">Filter by operator</string>
+    <string name="dialog_clear">Show all</string>
+    <string name="dialog_cancel">Cancel</string>
+
+    <!-- Disruption banner -->
+    <string name="banner_disruption_title">⚠ Disruption reported</string>
+    <string name="banner_more_incidents">+ %1$d more incident(s) — tap to view all</string>
+
+    <!-- Station info screen -->
+    <string name="info_tickets">Tickets</string>
+    <string name="info_accessibility">Accessibility</string>
+    <string name="info_facilities">Facilities</string>
+    <string name="info_getting_here">Getting here</string>
+    <string name="info_load_error">Could not load station information. Check your KB_API_KEY in Constants.kt.</string>
+    <string name="info_unknown">Unknown</string>
+    <string name="info_no_address">Address not available</string>
+    <string name="info_no_ticket_office">No ticket office</string>
+    <string name="menu_station_info">Station info</string>
+
+    <!-- Recent stations -->
+    <string name="label_recents">Recent:</string>
+    <!-- Share -->
+    <string name="share_service">Share service</string>
+</resources>

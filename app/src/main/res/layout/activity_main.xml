@@ -1,0 +1,349 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="?attr/colorSurface">
+
+    <!-- App Header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/colorPrimary"
+        android:padding="12dp"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="8dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/app_title"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:textColor="@color/white"/>
+
+            <ImageButton
+                android:id="@+id/btnGps"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@android:drawable/ic_menu_mylocation"
+                android:contentDescription="@string/find_nearest_station"
+                app:tint="@color/white"
+                android:layout_marginEnd="4dp"/>
+
+            <ImageButton
+                android:id="@+id/btnDarkMode"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_dark_mode"
+                android:contentDescription="@string/toggle_dark_mode"
+                app:tint="@color/white"/>
+        </LinearLayout>
+
+        <!-- Search bar -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="8dp"
+                app:endIconMode="clear_text"
+                app:endIconTint="@color/white"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense">
+                <AutoCompleteTextView
+                    android:id="@+id/etCrs"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textAutoComplete"
+                    android:textColor="@color/white"
+                    android:textColorHint="#99FFFFFF"
+                    android:completionThreshold="1"
+                    android:dropDownHeight="300dp"
+                    android:hint="@string/search_hint"/>
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <ImageButton
+                android:id="@+id/btnFavourite"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_gravity="bottom"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_star_outline"
+                android:contentDescription="@string/btn_favourite"
+                app:tint="@color/white"
+                android:layout_marginEnd="2dp"/>
+
+            <ImageButton
+                android:id="@+id/btnStationInfo"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_gravity="bottom"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@android:drawable/ic_menu_info_details"
+                android:contentDescription="@string/menu_station_info"
+                app:tint="@color/white"
+                android:layout_marginEnd="4dp"/>
+
+            <Button
+                android:id="@+id/btnSearch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom"
+                android:text="@string/btn_search"
+                android:backgroundTint="@color/accent"/>
+        </LinearLayout>
+
+        <!-- Favourites -->
+        <TextView
+            android:id="@+id/tvFavLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/label_favourites"
+            android:textColor="#AAFFFFFF"
+            android:textSize="11sp"
+            android:layout_marginTop="8dp"
+            android:visibility="gone"/>
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none">
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/chipGroupFavourites"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                app:singleLine="true"/>
+        </HorizontalScrollView>
+
+        <!-- Recent stations -->
+        <TextView
+            android:id="@+id/tvRecentsLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Recent:"
+            android:textColor="#AAFFFFFF"
+            android:textSize="11sp"
+            android:layout_marginTop="6dp"
+            android:visibility="gone"/>
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none">
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/chipGroupRecents"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                app:singleLine="true"/>
+        </HorizontalScrollView>
+    </LinearLayout>
+
+    <!-- Board tabs -->
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/tabLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:tabGravity="fill"
+        app:tabMode="fixed"/>
+
+    <!-- ── Disruption banner ───────────────────────────────────────────────── -->
+    <LinearLayout
+        android:id="@+id/bannerIncidents"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@color/disruption_bg"
+        android:paddingHorizontal="14dp"
+        android:paddingVertical="8dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tvBannerTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/banner_disruption_title"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="@color/disruption_text"/>
+
+        <TextView
+            android:id="@+id/tvBannerSummary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="@color/disruption_text"
+            android:maxLines="3"
+            android:ellipsize="end"/>
+
+        <TextView
+            android:id="@+id/tvBannerMore"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="11sp"
+            android:textColor="@color/disruption_text"
+            android:textStyle="italic"
+            android:visibility="gone"/>
+
+    </LinearLayout>
+
+    <!-- ── Filter bar ──────────────────────────────────────────────────────── -->
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="none"
+        android:paddingHorizontal="8dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="2dp">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <!-- Not in normal passenger service toggle -->
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipShowFreight"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/show_freight"
+                app:chipBackgroundColor="@color/chip_bg_selector"
+                android:checkable="true"
+                android:textSize="12sp"
+                android:layout_marginEnd="6dp"/>
+
+            <!-- Calling at filter -->
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipCallingAt"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/filter_calling_at"
+                app:chipBackgroundColor="@color/chip_bg_selector"
+                android:checkable="false"
+                android:textSize="12sp"
+                android:layout_marginEnd="6dp"
+                app:closeIconVisible="false"/>
+
+            <!-- Operator filter -->
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipOperator"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/filter_operator"
+                app:chipBackgroundColor="@color/chip_bg_selector"
+                android:checkable="false"
+                android:textSize="12sp"
+                android:layout_marginEnd="6dp"
+                app:closeIconVisible="false"/>
+
+            <!-- Time offset navigation -->
+            <ImageButton
+                android:id="@+id/btnTimePrev"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@android:drawable/ic_media_previous"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/time_earlier"
+                app:tint="?attr/colorOnSurface"
+                android:layout_marginEnd="2dp"/>
+
+            <TextView
+                android:id="@+id/tvTimeOffset"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/time_now"
+                android:textSize="12sp"
+                android:textColor="?attr/colorOnSurface"
+                android:paddingHorizontal="4dp"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"/>
+
+            <ImageButton
+                android:id="@+id/btnTimeNext"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@android:drawable/ic_media_next"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/time_later"
+                app:tint="?attr/colorOnSurface"
+                android:layout_marginStart="2dp"/>
+
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <!-- Board header + live indicator -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/tvHeader"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:padding="10dp"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:textColor="?attr/colorOnSurface"
+            android:visibility="gone"/>
+
+        <TextView
+            android:id="@+id/tvLiveIndicator"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingStart="4dp"
+            android:paddingEnd="10dp"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:visibility="gone"/>
+
+    </LinearLayout>
+
+    <ProgressBar
+        android:id="@+id/progressBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_margin="24dp"
+        android:visibility="gone"/>
+
+    <TextView
+        android:id="@+id/tvError"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="16dp"
+        android:textSize="14sp"
+        android:textColor="@color/status_cancelled"
+        android:visibility="gone"/>
+
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/swipeRefresh"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rvTrains"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:paddingBottom="8dp"
+            android:clipToPadding="false"/>
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+</LinearLayout>

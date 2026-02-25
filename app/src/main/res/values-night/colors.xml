@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="status_ontime">#66BB6A</color>
+    <color name="status_delayed">#FFA726</color>
+    <color name="status_cancelled">#EF5350</color>
+</resources>
