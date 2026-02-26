@@ -116,7 +116,6 @@ class ServiceDetailActivity : AppCompatActivity() {
         }
 
         // Bind to DarwinService so TRUST data flows into this screen's ViewModel
-        DarwinService.start(this)
         bindService(Intent(this, DarwinService::class.java), darwinConnection, BIND_AUTO_CREATE)
 
         observeDetailState(boardUnits, boardCoaches)

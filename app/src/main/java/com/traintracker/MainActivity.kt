@@ -7,7 +7,6 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.location.LocationManager
-import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.view.KeyEvent
@@ -69,10 +68,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private val notificationPermissionRequest = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { /* granted or denied — service already running, just won't show notification */ }
-
     // ─── onCreate ─────────────────────────────────────────────────────────────
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -114,21 +109,7 @@ class MainActivity : AppCompatActivity() {
             search()
         }
 
-        // Request POST_NOTIFICATIONS on Android 13+
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED) {
-                notificationPermissionRequest.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
-        }
-
-        // Start and bind to DarwinService — moved to onStart/onStop so the
-        // service stops when the app is backgrounded, not just when destroyed.
-    }
-
-    override fun onStart() {
-        super.onStart()
-        DarwinService.start(this)
+        // Bind to DarwinService — connects on bind, disconnects on unbind (no background drain)
         bindService(
             Intent(this, DarwinService::class.java),
             darwinConnection,
@@ -136,14 +117,9 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    override fun onStop() {
-        super.onStop()
-        unbindService(darwinConnection)
-        darwinService = null
-    }
-
     override fun onDestroy() {
         super.onDestroy()
+        unbindService(darwinConnection)
     }
 
     // ─── Adapter ──────────────────────────────────────────────────────────────
