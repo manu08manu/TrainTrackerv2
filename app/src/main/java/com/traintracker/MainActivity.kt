@@ -122,7 +122,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Start and bind to DarwinService
+        // Start and bind to DarwinService — moved to onStart/onStop so the
+        // service stops when the app is backgrounded, not just when destroyed.
+    }
+
+    override fun onStart() {
+        super.onStart()
         DarwinService.start(this)
         bindService(
             Intent(this, DarwinService::class.java),
@@ -131,9 +136,14 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
+    override fun onStop() {
+        super.onStop()
+        unbindService(darwinConnection)
+        darwinService = null
+    }
+
     override fun onDestroy() {
         super.onDestroy()
-        unbindService(darwinConnection)
     }
 
     // ─── Adapter ──────────────────────────────────────────────────────────────

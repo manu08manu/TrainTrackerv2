@@ -120,7 +120,19 @@ class DarwinService : Service() {
             }
         }
 
-        return START_STICKY  // system will restart us if killed
+        return START_NOT_STICKY  // do not restart if killed; we'll be restarted on next app open
+    }
+
+    /**
+     * Called when the last client unbinds (i.e. the app goes to the background).
+     * Returning false means onRebind will NOT be called — a fresh bind next time
+     * the Activity opens is sufficient.
+     * We call stopSelf() so the foreground notification disappears immediately.
+     */
+    override fun onUnbind(intent: Intent?): Boolean {
+        Log.d(TAG, "Last client unbound — stopping service")
+        stopSelf()
+        return false
     }
 
     override fun onDestroy() {

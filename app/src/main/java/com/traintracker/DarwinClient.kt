@@ -120,7 +120,7 @@ class DarwinClient {
                         val (command, headers, body) = readFrame(input)
                         when (command) {
                             ""          -> { /* heartbeat newline — ignore */ }
-                            "MESSAGE"   -> handleMessage(headers, body)
+                            "MESSAGE"   -> handleMessage(body)
                             "ERROR"     -> {
                                 val msg = headers["message"] ?: "STOMP ERROR"
                                 Log.e(TAG, "STOMP ERROR: $msg")
@@ -230,7 +230,7 @@ class DarwinClient {
 
     // --- Message handling -------------------------------------------------
 
-    private fun handleMessage(_headers: Map<String, String>, body: ByteArray) {
+    private fun handleMessage(body: ByteArray) {
         if (body.isEmpty()) return
         try {
             // Darwin pushport-v16 bodies are gzip compressed

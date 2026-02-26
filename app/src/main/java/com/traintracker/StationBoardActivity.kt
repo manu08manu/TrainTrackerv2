@@ -87,6 +87,11 @@ class StationBoardActivity : AppCompatActivity() {
             viewModel.fetchBoard(currentCrs, currentBoardType)
         }
 
+        viewModel.fetchBoard(currentCrs, currentBoardType)
+    }
+
+    override fun onStart() {
+        super.onStart()
         // Start & bind DarwinService (started once app-wide, safe to call again)
         DarwinService.start(this)
         bindService(
@@ -94,13 +99,16 @@ class StationBoardActivity : AppCompatActivity() {
             darwinConnection,
             BIND_AUTO_CREATE
         )
+    }
 
-        viewModel.fetchBoard(currentCrs, currentBoardType)
+    override fun onStop() {
+        super.onStop()
+        unbindService(darwinConnection)
+        darwinService = null
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        unbindService(darwinConnection)
     }
 
     // ── Tabs ──────────────────────────────────────────────────────────────────
