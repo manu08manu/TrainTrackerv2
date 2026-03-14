@@ -40,3 +40,4 @@ jobs:
         with:
           name: app-${{ matrix.build-type }}
           path: app/build/outputs/apk/${{ matrix.build-type }}/*.apk
+          if-no-files-found: error
