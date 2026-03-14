@@ -10,6 +10,14 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        include:
+          - build-type: debug
+            gradle-task: assembleDebug
+          - build-type: release
+            gradle-task: assembleRelease
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -23,17 +31,11 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build debug and release APKs
-        run: ./gradlew assembleDebug assembleRelease
+      - name: Build ${{ matrix.build-type }} APK
+        run: ./gradlew ${{ matrix.gradle-task }}
 
-      - name: Upload debug APK
+      - name: Upload ${{ matrix.build-type }} APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: app/build/outputs/apk/debug/*.apk
-
-      - name: Upload release APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-release
-          path: app/build/outputs/apk/release/*.apk
+          name: app-${{ matrix.build-type }}
+          path: app/build/outputs/apk/${{ matrix.build-type }}/*.apk
