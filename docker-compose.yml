@@ -1,0 +1,17 @@
+services:
+  api:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - CORPUS_DOWNLOAD_URL=${CORPUS_DOWNLOAD_URL:-}
+      - KB_STATIONS_URL=${KB_STATIONS_URL:-}
+      - KB_STATIONS_KEY=${KB_STATIONS_KEY:-}
+      - DATABASE_URL=sqlite:///./traintracker.db
+      - REFRESH_HOUR=${REFRESH_HOUR:-4}
+    volumes:
+      - api-data:/app
+    restart: unless-stopped
+
+volumes:
+  api-data:

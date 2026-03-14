@@ -54,9 +54,14 @@ object Constants {
     const val KB_STATIONS_KEY = ""
     const val KB_STATIONS_URL = ""
 
+    // ── TrainTracker Data API ─────────────────────────────────────────────
+    // Base URL of the backend that serves pre-processed CORPUS and station data.
+    const val DATA_API_BASE_URL = ""
+
     // ── CORPUS (TIPLOC/STANOX → CRS) ──────────────────────────────────────
     // Optional: URL to download fresh CORPUS from your RDM subscription.
     // Leave empty to use the bundled snapshot only.
+    // (Kept for fallback — prefer DATA_API_BASE_URL when set.)
     const val CORPUS_DOWNLOAD_URL = ""
 
     // ── NWR Train Movements / TRUST (Kafka relay) ─────────────────────────

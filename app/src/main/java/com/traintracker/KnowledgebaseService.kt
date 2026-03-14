@@ -60,14 +60,29 @@ class KnowledgebaseService {
         }
     }
 
-    // ─── Stations (JSON, full list cached) ────────────────────────────────
+    // ─── Stations (JSON) — prefers Data API, falls back to KB bulk load ──
 
     fun getStation(crs: String): KbStation? {
+        // Strategy 1: query the TrainTracker Data API per station
+        val apiBase = Constants.DATA_API_BASE_URL
+        if (apiBase.isNotEmpty()) {
+            try {
+                val json = getUrl("${apiBase.trimEnd('/')}/api/v1/stations/${crs.uppercase()}")
+                return parseApiStation(json)
+            } catch (e: Exception) {
+                Log.w(TAG, "Data API station lookup failed for $crs, falling back: ${e.message}")
+            }
+        }
+        // Strategy 2: legacy bulk load from KB
         ensureStationsLoaded()
         return stationCache[crs.uppercase()]
     }
 
-    fun preloadStations() = ensureStationsLoaded()
+    fun preloadStations() {
+        // With the Data API, we fetch per-station on demand, so preloading is a no-op.
+        if (Constants.DATA_API_BASE_URL.isNotEmpty()) return
+        ensureStationsLoaded()
+    }
 
     private fun ensureStationsLoaded() {
         if (stationCache.isNotEmpty()) return
@@ -90,6 +105,41 @@ class KnowledgebaseService {
         val response = client.newCall(request).execute()
         if (!response.isSuccessful) throw Exception("HTTP ${response.code} from $url")
         return response.body?.string() ?: throw Exception("Empty response from $url")
+    }
+
+    /** Simple GET without auth headers — used for the TrainTracker Data API. */
+    private fun getUrl(url: String): String {
+        val request = Request.Builder().url(url).build()
+        val response = client.newCall(request).execute()
+        if (!response.isSuccessful) throw Exception("HTTP ${response.code} from $url")
+        return response.body?.string() ?: throw Exception("Empty response from $url")
+    }
+
+    // ─── Data API JSON parser ─────────────────────────────────────────────
+
+    /** Parse a single station JSON object returned by the TrainTracker Data API. */
+    private fun parseApiStation(json: String): KbStation? {
+        val s = JSONObject(json)
+        val crs = s.optString("crs", "")
+        if (crs.length != 3) return null
+        return KbStation(
+            crs               = crs,
+            name              = s.optString("name", ""),
+            address           = s.optString("address", ""),
+            telephone         = s.optString("telephone", ""),
+            staffingNote      = s.optString("staffing_note", ""),
+            ticketOfficeHours = s.optString("ticket_office_hours", ""),
+            sstmAvailability  = s.optString("sstm_availability", ""),
+            stepFreeAccess    = s.optString("step_free_access", ""),
+            assistanceAvail   = s.optString("assistance_avail", ""),
+            wifi              = s.optString("wifi", ""),
+            toilets           = s.optString("toilets", ""),
+            waitingRoom       = s.optString("waiting_room", ""),
+            cctv              = s.optString("cctv", ""),
+            taxi              = s.optString("taxi", ""),
+            busInterchange    = s.optString("bus_interchange", ""),
+            carParking        = s.optString("car_parking", "")
+        )
     }
 
     // ─── XML parser: Incidents ────────────────────────────────────────────

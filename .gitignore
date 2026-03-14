@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.db
+
+# IDE
+.vscode/
+.idea/
+
+# Build
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# Android
+*.apk
+*.aab
+local.properties
+.gradle/
+app/build/
+
+# OS
+.DS_Store
+Thumbs.db

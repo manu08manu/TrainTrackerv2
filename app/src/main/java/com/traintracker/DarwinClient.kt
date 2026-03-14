@@ -441,14 +441,16 @@ class DarwinClient {
 
     private fun tiplocMatchesCrs(tiploc: String, crs: String): Boolean {
         if (tiploc.isEmpty() || crs.isEmpty()) return false
+        val canonicalCrs = CorpusData.canonicalCrs(crs)
         // 1. Station asset TIPLOC (most precise)
-        val station = StationData.findByCrs(crs)
+        val station = StationData.findByCrs(canonicalCrs)
         if (station?.tiploc != null) return tiploc == station.tiploc
-        // 2. CorpusData (full TIPLOC→CRS map, updated from RDM subscription)
+        // 2. CorpusData (full TIPLOC→CRS map — already alias-resolved)
         val corpusCrs = CorpusData.crsFromTiploc(tiploc)
-        if (corpusCrs != null) return corpusCrs == crs
-        // 3. Fallback prefix match
-        return tiploc.startsWith(crs, ignoreCase = true)
+        if (corpusCrs != null) return corpusCrs == canonicalCrs
+        // 3. Check against all alias codes for prefix match
+        val allCodes = CorpusData.aliasesFor(canonicalCrs) + canonicalCrs
+        return allCodes.any { tiploc.startsWith(it, ignoreCase = true) }
     }
 
     private fun readXmlText(parser: XmlPullParser): String {

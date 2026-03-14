@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONArray
 import java.io.File
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipInputStream
@@ -16,12 +17,11 @@ import java.util.zip.ZipInputStream
  * CORPUS maps between TIPLOC, STANOX, NLC, and CRS codes. It is the definitive
  * source for TIPLOC→CRS translation used by Darwin Push Port and TRUST messages.
  *
- * Data source: NWR CORPUS subscription on Rail Data Marketplace (OGL3 licence).
- *
  * Loading strategy:
- *   1. If CORPUS_DOWNLOAD_URL is set and a cached copy exists (<7 days old) → use cache
- *   2. If CORPUS_DOWNLOAD_URL is set and no valid cache → download and cache
- *   3. Fallback: comprehensive built-in table covering all major stations
+ *   1. If DATA_API_BASE_URL is set → fetch pre-processed data from the backend API
+ *   2. Else if CORPUS_DOWNLOAD_URL is set and a cached copy exists (<7 days old) → use cache
+ *   3. Else if CORPUS_DOWNLOAD_URL is set and no valid cache → download and cache
+ *   4. Fallback: comprehensive built-in table covering all major stations
  */
 object CorpusData {
 
@@ -33,14 +33,60 @@ object CorpusData {
     @Volatile private var stanoxToCrs: Map<String, String> = emptyMap()
     @Volatile private var loaded = false
 
+    // --- CRS alias map ----------------------------------------------------
+    // Some stations have multiple CRS codes in CORPUS depending on which
+    // platform or operator is used. This map normalises alternative CRS
+    // codes to the canonical code used in uk_stations.json.
+    // Add new entries here when additional aliases are discovered.
+    private val CRS_ALIASES: Map<String, String> = mapOf(
+        "SPL" to "STP",   // St Pancras International (Thameslink low-level)
+        "ABX" to "ABW",   // Abbey Wood (Elizabeth Line)
+        "STP" to "STP",   // canonical — included so reverse lookups work
+        "ABW" to "ABW",
+    )
+
+    /** Resolve an alternative CRS to its canonical form, or return as-is. */
+    fun canonicalCrs(crs: String): String = CRS_ALIASES[crs.uppercase()] ?: crs.uppercase()
+
+    /** All CRS codes (including aliases) that refer to the given canonical CRS. */
+    fun aliasesFor(canonicalCrs: String): Set<String> {
+        val target = canonicalCrs.uppercase()
+        return CRS_ALIASES.entries
+            .filter { it.value == target }
+            .map { it.key }
+            .toSet()
+    }
+
     // --- Public API -------------------------------------------------------
 
-    fun crsFromTiploc(tiploc: String): String? = (tiplocToCrs ?: BUILT_IN_TIPLOC)[tiploc.uppercase()]
-    fun crsFromStanox(stanox: String): String? = stanoxToCrs[stanox]
+    fun crsFromTiploc(tiploc: String): String? {
+        val raw = (tiplocToCrs ?: BUILT_IN_TIPLOC)[tiploc.uppercase()] ?: return null
+        return canonicalCrs(raw)
+    }
+
+    fun crsFromStanox(stanox: String): String? {
+        val raw = stanoxToCrs[stanox] ?: return null
+        return canonicalCrs(raw)
+    }
 
     suspend fun init(context: Context) = withContext(Dispatchers.IO) {
         if (loaded) return@withContext
 
+        // Strategy 1: fetch from TrainTracker Data API (pre-processed by backend)
+        val apiBase = Constants.DATA_API_BASE_URL
+        if (apiBase.isNotEmpty()) {
+            try {
+                if (loadFromApi(apiBase)) {
+                    Log.d(TAG, "Loaded CORPUS from Data API (${(tiplocToCrs ?: BUILT_IN_TIPLOC).size} entries)")
+                    loaded = true
+                    return@withContext
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Data API CORPUS load failed, falling back: ${e.message}")
+            }
+        }
+
+        // Strategy 2: download raw CORPUS CSV directly (legacy path)
         val url = Constants.CORPUS_DOWNLOAD_URL
         if (url.isNotEmpty()) {
             try {
@@ -60,9 +106,45 @@ object CorpusData {
                 Log.w(TAG, "CORPUS download failed, using built-in: ${e.message}")
             }
         } else {
-            Log.d(TAG, "Using built-in CORPUS (${BUILT_IN_TIPLOC.size} entries). Set CORPUS_DOWNLOAD_URL for full data.")
+            Log.d(TAG, "Using built-in CORPUS (${BUILT_IN_TIPLOC.size} entries). Set DATA_API_BASE_URL for full data.")
         }
         loaded = true
+    }
+
+    // --- API loader -------------------------------------------------------
+
+    /**
+     * Fetch all CORPUS entries from the backend Data API in a single bulk request.
+     * The /api/v1/corpus/all endpoint returns every TIPLOC→CRS mapping as JSON.
+     */
+    private fun loadFromApi(apiBase: String): Boolean {
+        val client = OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .build()
+        val url = "${apiBase.trimEnd('/')}/api/v1/corpus/all"
+        val request = Request.Builder().url(url).build()
+        val response = client.newCall(request).execute()
+        if (!response.isSuccessful) return false
+        val json = response.body?.string() ?: return false
+
+        val tiploc = HashMap<String, String>(4096)
+        val stanox = HashMap<String, String>(4096)
+        val array = JSONArray(json)
+        for (i in 0 until array.length()) {
+            val obj = array.getJSONObject(i)
+            val tiplocCode = obj.optString("tiploc", "").uppercase()
+            val crs = obj.optString("crs", "").uppercase()
+            val stanoxCode = obj.optString("stanox", "")
+            if (crs.length == 3 && tiplocCode.isNotEmpty()) {
+                tiploc[tiplocCode] = crs
+                if (stanoxCode.isNotEmpty()) stanox[stanoxCode] = crs
+            }
+        }
+        if (tiploc.isEmpty()) return false
+        tiplocToCrs = tiploc
+        stanoxToCrs = stanox
+        return true
     }
 
     // --- CSV parser -------------------------------------------------------
@@ -176,7 +258,7 @@ object CorpusData {
         "HNTN"     to "HUN", "ELYBDGS"  to "ELY",
         "KNGSLNN"  to "KLN", "THETFRD"  to "TTF",
         "HARWICH"  to "HWC", "CLCTN"    to "CIT",
-        "WSTRCLF"  to "WCF", "SWNDPLN"  to "SPL",
+        "WSTRCLF"  to "WCF", "SWNDPLN"  to "STP",
         "STORTFD"  to "BIS", "BRNTWD"   to "BRE",
         "CHMSFD"   to "CHM", "SCHN"     to "SCE",
 
