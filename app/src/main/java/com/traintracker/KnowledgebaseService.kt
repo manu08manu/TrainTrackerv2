@@ -250,6 +250,7 @@ class KnowledgebaseService {
             var tocCode = ""; var tocName = ""; var statusText = ""; var statusImage = ""
             var insideToc = false
             var currentTag = ""
+            var statusDescription = ""; var customUrl = ""
 
             var eventType = parser.eventType
             while (eventType != XmlPullParser.END_DOCUMENT) {
@@ -259,16 +260,19 @@ class KnowledgebaseService {
                         if (currentTag == "TOC") {
                             insideToc = true
                             tocCode = ""; tocName = ""; statusText = ""; statusImage = ""
+                            statusDescription = ""; customUrl = ""
                         }
                     }
                     XmlPullParser.TEXT -> {
                         if (!insideToc) { eventType = parser.next(); continue }
                         val text = parser.text?.trim() ?: ""
                         when (currentTag) {
-                            "TocCode"     -> tocCode = text
-                            "TocName"     -> tocName = text
-                            "Status"      -> statusText = text
-                            "StatusImage" -> statusImage = text
+                            "TocCode"           -> tocCode = text
+                            "TocName"           -> tocName = text
+                            "Status"            -> statusText = text
+                            "StatusImage"       -> statusImage = text
+                            "StatusDescription" -> statusDescription = text
+                            "CustomURL"         -> if (customUrl.isEmpty()) customUrl = text
                         }
                     }
                     XmlPullParser.END_TAG -> {
@@ -288,9 +292,11 @@ class KnowledgebaseService {
                             val code = tocCode.ifEmpty { TocData.codeFromName(tocName) }
                             if (code.isNotEmpty()) {
                                 result.add(KbNsiEntry(
-                                    tocCode = code,
-                                    tocName = tocName,
-                                    status  = level
+                                    tocCode           = code,
+                                    tocName           = tocName,
+                                    status            = level,
+                                    statusDescription = statusDescription,
+                                    customUrl         = customUrl
                                 ))
                             }
                             insideToc = false
@@ -478,7 +484,9 @@ data class KbIncident(
 data class KbNsiEntry(
     val tocCode: String,
     val tocName: String,
-    val status: String
+    val status: String,
+    val statusDescription: String = "",
+    val customUrl: String = ""
 ) {
     val statusLevel: Int get() = status.toIntOrNull() ?: 1
     val isGood:   Boolean get() = statusLevel == 1

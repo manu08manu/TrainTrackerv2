@@ -397,21 +397,31 @@ class StationBoardActivity : AppCompatActivity() {
                                 val matchingIncident = viewModel.incidents.value
                                     .firstOrNull { inc -> entry.tocCode in inc.operators }
 
-                                val msg = if (matchingIncident != null) {
-                                    if (matchingIncident.description.isNotEmpty() &&
-                                        matchingIncident.description != matchingIncident.summary)
-                                        "${matchingIncident.summary}\n\n${matchingIncident.description}"
-                                    else
-                                        matchingIncident.summary
-                                } else {
-                                    entry.statusLabel
-                                }
+                               val msg = if (matchingIncident != null) {
+                                if (matchingIncident.description.isNotEmpty() &&
+                                    matchingIncident.description != matchingIncident.summary)
+                                    "${matchingIncident.summary}\n\n${matchingIncident.description}"
+                                else
+                                    matchingIncident.summary
+                            } else if (entry.statusDescription.isNotEmpty()) {
+                                entry.statusDescription
+                            } else {
+                                entry.statusLabel
+                            }
 
-                                AlertDialog.Builder(this@StationBoardActivity)
+                                val dialog = AlertDialog.Builder(this@StationBoardActivity)
                                     .setTitle(entry.tocName)
                                     .setMessage(msg)
                                     .setPositiveButton("OK", null)
-                                    .show()
+                                if (entry.customUrl.isNotEmpty()) {
+                                    dialog.setNeutralButton("More info") { _, _ ->
+                                        startActivity(Intent(
+                                            Intent.ACTION_VIEW,
+                                            android.net.Uri.parse(entry.customUrl)
+                                        ))
+                                    }
+                                }
+                                dialog.show()
                             }
                         }
                         container.addView(chip)
