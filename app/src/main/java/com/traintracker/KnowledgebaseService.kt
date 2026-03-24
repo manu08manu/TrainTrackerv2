@@ -2,7 +2,6 @@ package com.traintracker
 
 import android.util.Log
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import org.xmlpull.v1.XmlPullParser
@@ -33,16 +32,14 @@ class KnowledgebaseService {
 
     companion object {
         private const val TAG = "KnowledgebaseService"
+        @Volatile private var stationCache: Map<String, KbStation> = emptyMap()
+        private val stationLoadLock = Any()
     }
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .build()
-
-    // Station data is the full list in one call — cache it for the session
-    @Volatile private var stationCache: Map<String, KbStation> = emptyMap()
-    private val stationLoadLock = Any()
 
     // OAuth2 bearer token cache — ConcurrentHashMap for safe multi-coroutine access
     // cacheKey = "$key:$secret:$tokenUrl" → (bearerToken, expiryMs)
@@ -52,7 +49,6 @@ class KnowledgebaseService {
 
     fun getIncidents(tocCode: String? = null): List<KbIncident> {
         return try {
-            // KB Incidents only supports x-apikey auth (not OAuth2)
             val xml = get(url = Constants.KB_INCIDENTS_URL, key = Constants.KB_INCIDENTS_KEY, secret = "", tokenUrl = "")
             val all = parseIncidentsXml(xml)
             if (tocCode.isNullOrBlank()) all
@@ -67,7 +63,6 @@ class KnowledgebaseService {
 
     fun getNsi(): List<KbNsiEntry> {
         return try {
-            // KB NSI only supports x-apikey auth (not OAuth2)
             val xml = get(url = Constants.KB_NSI_URL, key = Constants.KB_NSI_KEY, secret = "", tokenUrl = "")
             parseNsiXml(xml)
         } catch (e: Exception) {
@@ -76,7 +71,7 @@ class KnowledgebaseService {
         }
     }
 
-    // ─── Stations (JSON, full list cached) ────────────────────────────────
+    // ─── Stations (XML, per-TOC, cached) ──────────────────────────────────
 
     fun getStation(crs: String): KbStation? {
         ensureStationsLoaded()
@@ -88,20 +83,25 @@ class KnowledgebaseService {
     private fun ensureStationsLoaded() {
         if (stationCache.isNotEmpty()) return
         synchronized(stationLoadLock) {
-            // Double-checked locking: another thread may have loaded while we waited
             if (stationCache.isNotEmpty()) return
-            try {
-                val json = get(
-                    url      = Constants.KB_STATIONS_URL,
-                    key      = Constants.KB_STATIONS_KEY,
-                    secret   = Constants.KB_STATIONS_SECRET,
-                    tokenUrl = Constants.KB_STATIONS_TOKEN_URL
-                )
-                stationCache = parseStationsJson(json)
-                Log.d(TAG, "Loaded ${stationCache.size} stations from KB")
-            } catch (e: Exception) {
-                Log.w(TAG, "Stations load failed: ${e.message}")
+            val tocs = listOf(
+                "AW","CC","CH","CS","EM","ES","GC","GN","GR","GW","GX","HC","HT",
+                "HX","IL","LD","LE","LM","LO","ME","NT","SE","SN","SR","SW","TL","TP","VT","XC","XR"
+            )
+            val map = HashMap<String, KbStation>(2600)
+            for (toc in tocs) {
+                try {
+                    val url = Constants.KB_STATIONS_URL.replace("{TOC}", toc)
+                    val xml = get(url = url, key = Constants.KB_STATIONS_KEY, secret = "", tokenUrl = "")
+                    val parsed = parseStationsXml(xml)
+                    map.putAll(parsed)
+                    Log.d(TAG, "KB stations: loaded ${parsed.size} for $toc")
+                } catch (e: Exception) {
+                    Log.w(TAG, "KB stations: failed for $toc — ${e.message}")
+                }
             }
+            stationCache = map
+            Log.d(TAG, "KB stations: total loaded ${map.size}")
         }
     }
 
@@ -128,14 +128,6 @@ class KnowledgebaseService {
 
     // ─── OAuth2 bearer token ──────────────────────────────────────────────
 
-    /**
-     * Fetches a bearer token from [tokenUrl] using OAuth2 client_credentials.
-     *
-     * IMPORTANT: Each RDM API product has its own token endpoint.
-     * Pass the KB_*_TOKEN_URL constant matching the product you are calling.
-     *
-     * Tokens are cached in memory until 60 seconds before expiry.
-     */
     private fun getBearerToken(key: String, secret: String, tokenUrl: String): String {
         val cacheKey = "$key:$secret:$tokenUrl"
         tokenCache[cacheKey]?.let { (token, expiry) ->
@@ -166,12 +158,6 @@ class KnowledgebaseService {
 
     // ─── HTTP ─────────────────────────────────────────────────────────────
 
-    /**
-     * Makes an authenticated GET request.
-     *
-     * If [secret] is non-empty: uses OAuth2 (fetches bearer token from [tokenUrl]).
-     * If [secret] is empty: falls back to x-apikey header with [key].
-     */
     private fun get(url: String, key: String, secret: String, tokenUrl: String): String {
         val requestBuilder = okhttp3.Request.Builder().url(url)
         if (secret.isNotEmpty()) {
@@ -230,7 +216,6 @@ class KnowledgebaseService {
                     }
                     XmlPullParser.END_TAG -> {
                         if (parser.name == "Incident" && insideIncident) {
-                            // Skip incidents whose ClearanceTime is in the past
                             val isCleared = endTime.isNotEmpty() && try {
                                 java.time.OffsetDateTime.parse(endTime)
                                     .isBefore(java.time.OffsetDateTime.now())
@@ -262,7 +247,6 @@ class KnowledgebaseService {
             val parser = factory.newPullParser()
             parser.setInput(StringReader(xml))
 
-            // XML uses <TOC> blocks with <TocCode>, <TocName>, <Status> text, <StatusImage> filename
             var tocCode = ""; var tocName = ""; var statusText = ""; var statusImage = ""
             var insideToc = false
             var currentTag = ""
@@ -289,7 +273,6 @@ class KnowledgebaseService {
                     }
                     XmlPullParser.END_TAG -> {
                         if (parser.name == "TOC" && insideToc) {
-                            // Map status text / image filename to numeric level 1-4
                             val level = when {
                                 statusText.equals("Good service", ignoreCase = true) -> "1"
                                 statusImage.contains("tick", ignoreCase = true)      -> "1"
@@ -323,91 +306,129 @@ class KnowledgebaseService {
         return result
     }
 
-    // ─── JSON parser: Stations ────────────────────────────────────────────
+    // ─── XML parser: Stations ─────────────────────────────────────────────
 
-    private fun parseStationsJson(json: String): Map<String, KbStation> {
-        val map = HashMap<String, KbStation>(2600)
+    private fun parseStationsXml(xml: String): Map<String, KbStation> {
+        val map = HashMap<String, KbStation>()
         try {
-            val array: JSONArray = when {
-                json.trimStart().startsWith('[') -> JSONArray(json)
-                else -> {
-                    val root = JSONObject(json)
-                    root.optJSONArray("stations")
-                        ?: root.optJSONArray("StationList")
-                        ?: root.optJSONArray("Station")
-                        ?: return map
+            val factory = XmlPullParserFactory.newInstance()
+            factory.isNamespaceAware = false
+            val parser = factory.newPullParser()
+            parser.setInput(StringReader(xml))
+
+            var inStation = false
+            var crs = ""; var name = ""; var telephone = ""
+            var staffingLevel = ""
+            var cctv = ""
+            var ticketOfficeAvail = ""
+            var ticketMachineAvail = ""
+            var waitingRoom = ""
+            var toilets = ""
+            var wifi = ""
+            var stepFreeAccess = ""
+            var assistanceAvail = ""
+            var taxiAvail = ""
+            var carParkSpaces = ""
+            val addressLines = mutableListOf<String>()
+            var postCode = ""
+
+            val tagStack = ArrayDeque<String>()
+
+            var eventType = parser.eventType
+            while (eventType != XmlPullParser.END_DOCUMENT) {
+                when (eventType) {
+                    XmlPullParser.START_TAG -> {
+                        val tag = parser.name ?: ""
+                        tagStack.addLast(tag)
+                        if (tag == "Station") {
+                            inStation = true
+                            crs = ""; name = ""; telephone = ""
+                            staffingLevel = ""; cctv = ""
+                            ticketOfficeAvail = ""; ticketMachineAvail = ""
+                            waitingRoom = ""; toilets = ""; wifi = ""
+                            stepFreeAccess = ""; assistanceAvail = ""
+                            taxiAvail = ""; carParkSpaces = ""
+                            addressLines.clear(); postCode = ""
+                        }
+                    }
+                    XmlPullParser.TEXT -> {
+                        if (!inStation) { eventType = parser.next(); continue }
+                        val text = parser.text?.trim() ?: ""
+                        if (text.isEmpty()) { eventType = parser.next(); continue }
+                        val tag = tagStack.lastOrNull() ?: ""
+                        val parent = tagStack.dropLast(1).lastOrNull() ?: ""
+                        val grandparent = tagStack.dropLast(2).lastOrNull() ?: ""
+                        val great = tagStack.dropLast(3).lastOrNull() ?: ""
+                        when {
+                            tag == "CrsCode" && parent == "Station"        -> crs = text.uppercase()
+                            tag == "Name" && parent == "Station"           -> name = text
+                            tag == "Line"                                   -> addressLines.add(text)
+                            tag == "PostCode"                               -> postCode = text
+                            tag == "PrimaryTelephoneNumber" && great == "Station" ->
+                                if (telephone.isEmpty()) telephone = text
+                            tag == "StaffingLevel"                         -> staffingLevel = text
+                            tag == "Available" && parent == "ClosedCircuitTelevision" ->
+                                cctv = if (text == "true") "Yes" else ""
+                            tag == "Available" && parent == "TicketOffice" ->
+                                ticketOfficeAvail = if (text == "true") "Open" else "Closed"
+                            tag == "Available" && parent == "TicketMachine" && grandparent == "Fares" ->
+                                ticketMachineAvail = if (text == "true") "Available" else ""
+                            tag == "Available" && parent == "WaitingRoom"  ->
+                                waitingRoom = if (text == "true") "Yes" else ""
+                            tag == "Available" && parent == "Toilets"      ->
+                                toilets = if (text == "true") "Yes" else ""
+                            tag == "Available" && parent == "WiFi"         ->
+                                wifi = if (text == "true") "Yes" else ""
+                            tag == "Coverage"                              -> stepFreeAccess = when (text) {
+                                "wholeStation"   -> "Whole station"
+                                "partialStation" -> "Partial"
+                                "none"           -> ""
+                                else             -> text
+                            }
+                            tag == "Available" && parent == "Accessibility" ->
+                                assistanceAvail = if (text == "true") "Available" else ""
+                            tag == "Available" && parent == "AccessibleTaxis" ->
+                                taxiAvail = if (text == "true") "Available" else ""
+                            tag == "NumberAccessibleSpaces"                ->
+                                if (text.toIntOrNull() ?: 0 > 0) carParkSpaces = "$text accessible spaces"
+                        }
+                    }
+                    XmlPullParser.END_TAG -> {
+                        val tag = parser.name ?: ""
+                        if (tag == "Station" && inStation) {
+                            if (crs.length == 3) {
+                                val address = (addressLines + listOf(postCode))
+                                    .filter { it.isNotEmpty() }.joinToString(", ")
+                                map[crs] = KbStation(
+                                    crs               = crs,
+                                    name              = name,
+                                    address           = address,
+                                    telephone         = telephone,
+                                    staffingNote      = staffingLevel,
+                                    ticketOfficeHours = ticketOfficeAvail,
+                                    sstmAvailability  = ticketMachineAvail,
+                                    stepFreeAccess    = stepFreeAccess,
+                                    assistanceAvail   = assistanceAvail,
+                                    wifi              = wifi,
+                                    toilets           = toilets,
+                                    waitingRoom       = waitingRoom,
+                                    cctv              = cctv,
+                                    taxi              = taxiAvail,
+                                    busInterchange    = "",
+                                    carParking        = carParkSpaces
+                                )
+                            }
+                            inStation = false
+                        }
+                        tagStack.removeLastOrNull()
+                    }
                 }
-            }
-            for (i in 0 until array.length()) {
-                val station = parseStationObject(array.getJSONObject(i)) ?: continue
-                if (station.crs.length == 3) map[station.crs] = station
+                eventType = parser.next()
             }
         } catch (e: Exception) {
-            Log.e(TAG, "parseStationsJson error: ${e.message}")
+            Log.e(TAG, "parseStationsXml error: ${e.message}")
         }
         return map
-    }
-
-    private fun parseStationObject(s: JSONObject): KbStation? {
-        fun str(vararg keys: String): String {
-            for (k in keys) { val v = s.optString(k, "").trim(); if (v.isNotEmpty()) return v }
-            return ""
-        }
-        fun obj(vararg keys: String): JSONObject? {
-            for (k in keys) { val v = s.optJSONObject(k); if (v != null) return v }
-            return null
-        }
-        fun avail(vararg keys: String): String {
-            val o = obj(*keys) ?: return ""
-            return o.optString("Availability", o.optString("availability", "")).trim()
-        }
-
-        val crs = str("CrsCode", "crsCode", "crs")
-        if (crs.length != 3) return null
-
-        val toHours = buildString {
-            val to = obj("TicketOfficeAvailability", "ticketOfficeAvailability")
-            if (to != null) {
-                listOf("Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday").forEach { day ->
-                    val h = to.optString(day, to.optString(day.lowercase(), "")).trim()
-                    if (h.isNotEmpty()) append("$day: $h\n")
-                }
-            }
-        }.trim()
-
-        val parking = buildString {
-            val cp = obj("CarPark", "carPark")
-            if (cp != null) {
-                val a = cp.optString("Availability", "").trim()
-                if (a.isNotEmpty()) append("$a\n")
-                val n = cp.optString("Notes", "").trim()
-                if (n.isNotEmpty()) append(n)
-            }
-        }.trim()
-
-        return KbStation(
-            crs               = crs,
-            name              = str("Name", "name"),
-            address           = listOf(
-                str("Address1","address1"), str("Address2","address2"),
-                str("Town","town"), str("County","county"), str("Postcode","postcode")
-            ).filter { it.isNotEmpty() }.joinToString(", "),
-            telephone         = str("Telephone","telephone"),
-            staffingNote      = str("Staffing","staffing").ifEmpty {
-                obj("Staffing","staffing")?.optString("Note","") ?: ""
-            },
-            ticketOfficeHours = toHours,
-            sstmAvailability  = avail("SelfServiceTicketMachines","selfServiceTicketMachines"),
-            stepFreeAccess    = avail("StepFreeAccess","stepFreeAccess"),
-            assistanceAvail   = avail("AssistanceAvailability","assistanceAvailability"),
-            wifi              = avail("WiFi","wifi"),
-            toilets           = avail("Toilets","toilets"),
-            waitingRoom       = avail("WaitingRoom","waitingRoom"),
-            cctv              = avail("CCTV","cctv"),
-            taxi              = avail("Taxi","taxi"),
-            busInterchange    = avail("BusInterchange","busInterchange"),
-            carParking        = parking
-        )
     }
 
     // ─── JSON parser: TOC ─────────────────────────────────────────────────
@@ -455,9 +476,9 @@ data class KbIncident(
 )
 
 data class KbNsiEntry(
-    val tocCode: String,   // 2-letter ATOC code e.g. "GW", "VT" — derived from TOCName lookup
-    val tocName: String,   // Full name as returned by NSI e.g. "Great Western Railway"
-    val status: String     // "1"=good service, "2"=minor delays, "3"=major delays, "4"=severe
+    val tocCode: String,
+    val tocName: String,
+    val status: String
 ) {
     val statusLevel: Int get() = status.toIntOrNull() ?: 1
     val isGood:   Boolean get() = statusLevel == 1
@@ -493,6 +514,6 @@ data class KbStation(
 )
 
 data class KbTocEntry(
-    val code: String,   // ATOC code e.g. "GW", "VT"
-    val name: String    // Full operator name e.g. "Great Western Railway"
+    val code: String,
+    val name: String
 )

@@ -13,7 +13,6 @@ import android.view.inputmethod.InputMethodManager
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.edit
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -21,14 +20,10 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.chip.Chip
 import com.google.android.material.tabs.TabLayout
 import com.traintracker.databinding.ActivityStationBoardBinding
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
-/**
- * Full station board showing arrivals, departures, and all services.
- * Opened by tapping a station in the calling points list.
- *
- * Binds to DarwinService for TRUST movements, Allocation and VSTP data.
- */
 class StationBoardActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityStationBoardBinding
@@ -38,7 +33,6 @@ class StationBoardActivity : AppCompatActivity() {
     private var currentCrs = ""
     private var currentBoardType = BoardType.ALL
 
-    // ── Service binding (TRUST + Allocation + VSTP) ───────────────────────────
     private var liveService: DarwinService? = null
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, binder: IBinder) {
@@ -50,6 +44,9 @@ class StationBoardActivity : AppCompatActivity() {
         }
         override fun onServiceDisconnected(name: ComponentName) { liveService = null }
     }
+
+    // Instance of KnowledgebaseService for station lookups
+    private val kbService = KnowledgebaseService()
 
     companion object {
         private const val EXTRA_CRS  = "crs"
@@ -76,6 +73,11 @@ class StationBoardActivity : AppCompatActivity() {
         val stationName = intent.getStringExtra(EXTRA_NAME) ?: currentCrs
         supportActionBar?.title = stationName
 
+        // Tap toolbar title to show station facility info
+        binding.toolbar.setOnClickListener {
+            showStationInfoDialog(currentCrs, stationName)
+        }
+
         setupTabs()
         setupAdapter()
         setupHeadcodeSearch()
@@ -96,12 +98,60 @@ class StationBoardActivity : AppCompatActivity() {
         unbindService(serviceConnection)
     }
 
+    // ── Station info dialog ───────────────────────────────────────────────────
+    private fun showStationInfoDialog(crs: String, name: String) {
+        lifecycleScope.launch {
+            val station = withContext(Dispatchers.IO) {
+                kbService.getStation(crs)
+            }
+            if (!isFinishing && !isDestroyed) {
+                if (station == null) {
+                    AlertDialog.Builder(this@StationBoardActivity)
+                        .setTitle("Station Information")
+                        .setMessage("No facility data available for this station.")
+                        .setPositiveButton("OK", null)
+                        .show()
+                    return@launch
+                }
+
+                val sb = StringBuilder()
+                fun row(label: String, value: String) {
+                    if (value.isNotEmpty()) sb.appendLine("$label: $value")
+                }
+
+                if (station.address.isNotEmpty()) sb.appendLine(station.address).appendLine()
+                row("Phone",          station.telephone)
+                row("Staffing",       station.staffingNote)
+                row("Ticket office",  station.ticketOfficeHours)
+                row("Ticket machine", station.sstmAvailability)
+                row("Step-free",      station.stepFreeAccess)
+                row("Assistance",     station.assistanceAvail)
+                row("WiFi",           station.wifi)
+                row("Toilets",        station.toilets)
+                row("Waiting room",   station.waitingRoom)
+                row("CCTV",           station.cctv)
+                row("Taxi",           station.taxi)
+                row("Bus interchange",station.busInterchange)
+                row("Car parking",    station.carParking)
+
+                val msg = sb.toString().trimEnd().ifEmpty {
+                    "No facility details available for $name."
+                }
+
+                AlertDialog.Builder(this@StationBoardActivity)
+                    .setTitle(name)
+                    .setMessage(msg)
+                    .setPositiveButton("OK", null)
+                    .show()
+            }
+        }
+    }
+
     // ── Tabs ──────────────────────────────────────────────────────────────────
     private fun setupTabs() {
         BoardType.values().forEach { type ->
             binding.tabLayout.addTab(binding.tabLayout.newTab().setText(type.label))
         }
-        // Default to ALL (index 2)
         binding.tabLayout.getTabAt(2)?.select()
 
         binding.tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
@@ -114,9 +164,8 @@ class StationBoardActivity : AppCompatActivity() {
         })
     }
 
-    // ── Adapter + category chips ──────────────────────────────────────────────
+    // ── Adapter ───────────────────────────────────────────────────────────────
     private fun setupAdapter() {
-
         adapter = TrainAdapter(
             onServiceClick = { service ->
                 val destCrs = service.subsequentCallingPoints.lastOrNull()?.crs ?: ""
@@ -141,26 +190,18 @@ class StationBoardActivity : AppCompatActivity() {
         )
         binding.rvTrains.layoutManager = LinearLayoutManager(this)
         binding.rvTrains.adapter = adapter
-
     }
 
     // ── Headcode search ───────────────────────────────────────────────────────
     private fun setupHeadcodeSearch() {
-        // Apply filter on keyboard "Search" action
         binding.etHeadcode.setOnEditorActionListener { _, _, event ->
             if (event?.keyCode == KeyEvent.KEYCODE_ENTER || event == null) {
                 applyHeadcodeFilter(); true
             } else false
         }
-
-        // Also apply on focus-lost so swipe-to-refresh doesn't lose it.
-        // Guard: if the chip is already visible, focus loss is likely from tapping the close
-        // icon — don't re-apply the filter or it fights with onCloseIconClickListener.
         binding.etHeadcode.setOnFocusChangeListener { _, hasFocus ->
             if (!hasFocus && binding.chipHeadcode.visibility != View.VISIBLE) applyHeadcodeFilter()
         }
-
-        // Dismiss chip clears the filter
         binding.chipHeadcode.setOnCloseIconClickListener {
             clearHeadcodeFilter()
         }
@@ -168,10 +209,7 @@ class StationBoardActivity : AppCompatActivity() {
 
     private fun applyHeadcodeFilter() {
         val hc = binding.etHeadcode.text.toString().trim().uppercase()
-        if (hc.isEmpty()) {
-            clearHeadcodeFilter()
-            return
-        }
+        if (hc.isEmpty()) { clearHeadcodeFilter(); return }
         viewModel.setHeadcodeFilter(hc)
         binding.chipHeadcode.text = hc
         binding.chipHeadcode.visibility = View.VISIBLE
@@ -222,41 +260,36 @@ class StationBoardActivity : AppCompatActivity() {
         }
     }
 
-    // ── NRCC messages (from board response) ──────────────────────────────────
+    // ── NRCC messages ─────────────────────────────────────────────────────────
     private fun showNrccMessages(messages: List<String>) {
         android.util.Log.d("StationBoard", "showNrccMessages called: ${messages.size} messages")
-        if (messages.isEmpty()) {
-            // Don't hide the banner — KB incidents may still be showing
-            return
-        }
+        if (messages.isEmpty()) return
         val container = binding.incidentChipContainer
-        // Remove existing NRCC chips (tagged) before re-adding
         val toRemove = (0 until container.childCount)
             .map { container.getChildAt(it) }
             .filter { it.tag == "nrcc" }
         toRemove.forEach { container.removeView(it) }
 
-        // Add each NRCC message as a chip at the front of the container
         messages.reversed().forEach { msg ->
             val severity = when {
                 msg.contains("cancel", ignoreCase = true) ||
                         msg.contains("delayed", ignoreCase = true) ||
-                        msg.contains("disruption", ignoreCase = true) -> 0xFFB71C1C.toInt()  // red
-                else -> 0xFF1565C0.toInt()  // blue for info (lifts etc)
+                        msg.contains("disruption", ignoreCase = true) -> 0xFFB71C1C.toInt()
+                else -> 0xFF1565C0.toInt()
             }
-            val chip = com.google.android.material.chip.Chip(this).apply {
+            val chip = Chip(this).apply {
                 tag = "nrcc"
                 text = "ℹ ${msg.take(50)}${if (msg.length > 50) "…" else ""}"
                 textSize = 11f
                 isClickable = true
                 chipBackgroundColor = android.content.res.ColorStateList.valueOf(severity)
-                setTextColor(android.graphics.Color.WHITE)
+                setTextColor(Color.WHITE)
                 layoutParams = android.view.ViewGroup.MarginLayoutParams(
                     android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
                     android.view.ViewGroup.LayoutParams.WRAP_CONTENT
                 ).apply { marginEnd = 8 }
                 setOnClickListener {
-                    androidx.appcompat.app.AlertDialog.Builder(this@StationBoardActivity)
+                    AlertDialog.Builder(this@StationBoardActivity)
                         .setTitle("Station Notice")
                         .setMessage(msg)
                         .setPositiveButton("OK", null)
@@ -265,7 +298,7 @@ class StationBoardActivity : AppCompatActivity() {
             }
             container.addView(chip, 0)
         }
-        binding.incidentsBanner.visibility = android.view.View.VISIBLE
+        binding.incidentsBanner.visibility = View.VISIBLE
     }
 
     // ── Incidents banner ──────────────────────────────────────────────────────
@@ -274,14 +307,12 @@ class StationBoardActivity : AppCompatActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.incidents.collect { incidents ->
                     val container = binding.incidentChipContainer
-                    // Remove only KB incident chips (untagged), preserve NRCC chips (tagged "nrcc")
                     val toRemove = (0 until container.childCount)
                         .map { container.getChildAt(it) }
                         .filter { it.tag != "nrcc" }
                     toRemove.forEach { container.removeView(it) }
                     val now = java.util.Date().toString()
                     val active = incidents.filter { it.endTime.isEmpty() || it.endTime > now }
-                    // Only hide banner if both KB incidents AND NRCC chips are absent
                     if (active.isEmpty()) {
                         if (container.childCount == 0) binding.incidentsBanner.visibility = View.GONE
                         return@collect
@@ -298,11 +329,12 @@ class StationBoardActivity : AppCompatActivity() {
                                 android.view.ViewGroup.LayoutParams.WRAP_CONTENT
                             ).apply { marginEnd = 8 }
                             setOnClickListener {
-                                val msg = if (incident.description.isNotEmpty() && incident.description != incident.summary)
+                                val msg = if (incident.description.isNotEmpty() &&
+                                    incident.description != incident.summary)
                                     "${incident.summary}\n\n${incident.description}"
                                 else
                                     incident.summary
-                                androidx.appcompat.app.AlertDialog.Builder(this@StationBoardActivity)
+                                AlertDialog.Builder(this@StationBoardActivity)
                                     .setTitle("Service Disruption")
                                     .setMessage(msg)
                                     .setPositiveButton("OK", null)
@@ -325,7 +357,6 @@ class StationBoardActivity : AppCompatActivity() {
                     container.removeAllViews()
 
                     if (nsiList.isEmpty()) {
-                        // Data not loaded yet — hide
                         binding.nsiStrip.visibility = View.GONE
                         return@collect
                     }
@@ -334,7 +365,6 @@ class StationBoardActivity : AppCompatActivity() {
                     val disrupted = nsiList.filter { !it.isGood }
 
                     if (disrupted.isEmpty()) {
-                        // All good — show a single green confirmation chip
                         val chip = Chip(this@StationBoardActivity).apply {
                             text = "✓ Good service on all operators"
                             textSize = 11f
@@ -362,13 +392,22 @@ class StationBoardActivity : AppCompatActivity() {
                                 android.view.ViewGroup.LayoutParams.WRAP_CONTENT
                             ).apply { marginEnd = 8 }
                             setOnClickListener {
-                                val incident = viewModel.incidents.value
+                                // Match incident by TOC code for full description,
+                                // fall back to statusLabel if none found
+                                val matchingIncident = viewModel.incidents.value
                                     .firstOrNull { inc -> entry.tocCode in inc.operators }
-                                val msg = if (incident != null)
-                                    "${incident.summary}\n\n${incident.description}"
-                                else
+
+                                val msg = if (matchingIncident != null) {
+                                    if (matchingIncident.description.isNotEmpty() &&
+                                        matchingIncident.description != matchingIncident.summary)
+                                        "${matchingIncident.summary}\n\n${matchingIncident.description}"
+                                    else
+                                        matchingIncident.summary
+                                } else {
                                     entry.statusLabel
-                                androidx.appcompat.app.AlertDialog.Builder(this@StationBoardActivity)
+                                }
+
+                                AlertDialog.Builder(this@StationBoardActivity)
                                     .setTitle(entry.tocName)
                                     .setMessage(msg)
                                     .setPositiveButton("OK", null)

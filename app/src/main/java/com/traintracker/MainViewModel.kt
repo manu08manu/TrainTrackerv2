@@ -532,8 +532,11 @@ class MainViewModel : ViewModel() {
     fun fetchNsi() {
         viewModelScope.launch {
             try { _nsi.value = withContext(Dispatchers.IO) { kb.getNsi() } } catch (_: Exception) {}
+            try { withContext(Dispatchers.IO) { kb.preloadStations() } } catch (_: Exception) {}
         }
     }
+
+    fun stationInfo(crs: String): KbStation? = kb.getStation(crs)
 
     fun nsiForOperator(operatorCode: String): KbNsiEntry? {
         if (operatorCode.isEmpty()) return null
