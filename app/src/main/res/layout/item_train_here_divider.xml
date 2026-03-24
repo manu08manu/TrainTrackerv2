@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp"
+    android:paddingTop="4dp"
+    android:paddingBottom="4dp">
+
+    <View
+        android:layout_width="0dp"
+        android:layout_height="2dp"
+        android:layout_weight="1"
+        android:background="?attr/colorPrimary" />
+
+    <TextView
+        android:id="@+id/tvTrainHereLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="● Train here"
+        android:textColor="?attr/colorPrimary"
+        android:textSize="12sp"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp" />
+
+    <TextView
+        android:id="@+id/tvHerDelay"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="12sp"
+        android:paddingStart="4dp"
+        android:paddingEnd="8dp" />
+
+    <View
+        android:layout_width="0dp"
+        android:layout_height="2dp"
+        android:layout_weight="1"
+        android:background="?attr/colorPrimary" />
+
+</LinearLayout>

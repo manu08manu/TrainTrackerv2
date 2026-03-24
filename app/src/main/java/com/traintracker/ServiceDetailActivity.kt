@@ -1,0 +1,691 @@
+package com.traintracker
+
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
+import android.graphics.Color
+import android.os.Bundle
+import android.os.IBinder
+import android.view.View
+import androidx.activity.viewModels
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.recyclerview.widget.LinearLayoutManager
+import com.traintracker.databinding.ActivityServiceDetailBinding
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+class ServiceDetailActivity : AppCompatActivity() {
+
+    private lateinit var binding: ActivityServiceDetailBinding
+    private val viewModel: MainViewModel by viewModels()
+
+    private var showPassing  = false
+    private var showDetailed = false
+    private var callingAdapter: CallingPointAdapter? = null
+    private var cachedDetails: ServiceDetails? = null
+    private var queryCrs      = ""
+    private var trainHeadcode = ""
+    private var destCrs       = ""   // for HSP lookup
+
+    // ── Service binding (TRUST + Allocation) ─────────────────────────────────
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName, binder: IBinder) {
+            val svc = (binder as DarwinService.LocalBinder).getService()
+            viewModel.attachTrustMovements(svc.trustMovements, svc.trustActivations, svc.trustConnected)
+            viewModel.attachAllocationFormations(svc.allocations)
+        }
+        override fun onServiceDisconnected(name: ComponentName) {}
+    }
+
+    // ── TIPLOC name resolver ─────────────────────────────────────────────────
+    /** Converts a raw TIPLOC (e.g. "WDONPDS") to a readable name via CORPUS NLCDESC. */
+    private fun resolveLocationName(raw: String): String =
+        if (raw.matches(Regex("[A-Z0-9]{4,7}")))
+            CorpusData.nameFromTiploc(raw) ?: raw
+        else raw
+
+    companion object {
+        private const val EXTRA_SERVICE_ID = "service_id"
+        private const val EXTRA_HEADCODE   = "headcode"
+        private const val EXTRA_ORIGIN     = "origin"
+        private const val EXTRA_DEST       = "destination"
+        private const val EXTRA_DEST_CRS   = "dest_crs"
+        private const val EXTRA_STD        = "std"
+        private const val EXTRA_ETD        = "etd"
+        private const val EXTRA_QUERY_CRS  = "query_crs"
+        private const val EXTRA_UNITS      = "units"
+        private const val EXTRA_COACHES    = "coaches"
+        private const val EXTRA_PREV_CALLING_POINTS = "prev_calling_points"
+        private const val EXTRA_SUBS_CALLING_POINTS = "subs_calling_points"
+        private const val EXTRA_IS_PASSING          = "is_passing"
+        private const val EXTRA_PLATFORM            = "platform"
+
+        fun start(ctx: Context, serviceId: String, headcode: String,
+                  origin: String, destination: String, std: String, etd: String = "",
+                  queryCrs: String, destCrs: String = "",
+                  units: List<String> = emptyList(), coachCount: Int = 0,
+                  previousCallingPoints: List<CallingPoint> = emptyList(),
+                  subsequentCallingPoints: List<CallingPoint> = emptyList(),
+                  isPassingService: Boolean = false,
+                  platform: String = "") {
+            ctx.startActivity(Intent(ctx, ServiceDetailActivity::class.java).apply {
+                putExtra(EXTRA_SERVICE_ID, serviceId)
+                putExtra(EXTRA_HEADCODE,   headcode)
+                putExtra(EXTRA_ORIGIN,     origin)
+                putExtra(EXTRA_DEST,       destination)
+                putExtra(EXTRA_DEST_CRS,   destCrs)
+                putExtra(EXTRA_STD,        std)
+                putExtra(EXTRA_ETD,        etd)
+                putExtra(EXTRA_QUERY_CRS,  queryCrs)
+                putStringArrayListExtra(EXTRA_UNITS, ArrayList(units))
+                putExtra(EXTRA_COACHES,    coachCount)
+                putParcelableArrayListExtra(EXTRA_PREV_CALLING_POINTS, ArrayList(previousCallingPoints))
+                putParcelableArrayListExtra(EXTRA_SUBS_CALLING_POINTS, ArrayList(subsequentCallingPoints))
+                putExtra(EXTRA_IS_PASSING, isPassingService)
+                putExtra(EXTRA_PLATFORM,   platform)
+            })
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        binding = ActivityServiceDetailBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+
+        setSupportActionBar(binding.toolbar)
+        supportActionBar?.setDisplayHomeAsUpEnabled(true)
+        binding.toolbar.setNavigationOnClickListener { finish() }
+        binding.btnShare.setOnClickListener { shareCurrentService() }
+
+        val serviceId    = intent.getStringExtra(EXTRA_SERVICE_ID) ?: run { finish(); return }
+        trainHeadcode    = intent.getStringExtra(EXTRA_HEADCODE) ?: ""
+        val origin       = intent.getStringExtra(EXTRA_ORIGIN)   ?: ""
+        val dest         = resolveLocationName(intent.getStringExtra(EXTRA_DEST) ?: "")
+        queryCrs         = intent.getStringExtra(EXTRA_QUERY_CRS) ?: ""
+        destCrs          = intent.getStringExtra(EXTRA_DEST_CRS)  ?: ""
+        val boardUnits   = intent.getStringArrayListExtra(EXTRA_UNITS) ?: emptyList<String>()
+        // Cap at 20 — formation data can occasionally have bad values
+        val boardCoaches  = intent.getIntExtra(EXTRA_COACHES, 0).takeIf { it in 1..20 } ?: 0
+        val boardPlatform = intent.getStringExtra(EXTRA_PLATFORM) ?: ""
+
+        val prevCallingPoints = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU)
+            intent.getParcelableArrayListExtra(EXTRA_PREV_CALLING_POINTS, CallingPoint::class.java) ?: emptyList()
+        else
+            (@Suppress("DEPRECATION") intent.getParcelableArrayListExtra<CallingPoint>(EXTRA_PREV_CALLING_POINTS)) ?: emptyList()
+        val subsCallingPoints = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU)
+            intent.getParcelableArrayListExtra(EXTRA_SUBS_CALLING_POINTS, CallingPoint::class.java) ?: emptyList()
+        else
+            (@Suppress("DEPRECATION") intent.getParcelableArrayListExtra<CallingPoint>(EXTRA_SUBS_CALLING_POINTS)) ?: emptyList()
+
+        // All services are sourced from CIF — serviceID is always a CIF UID.
+        lifecycleScope.launch(Dispatchers.IO) {
+            // CIF headcode lookup — fast DB query, tells us isPass and gives uid for calling points
+            val cifMovement = if (trainHeadcode.isNotEmpty() && queryCrs.isNotEmpty() && CifRepository.isReady)
+                CifRepository.findByHeadcode(trainHeadcode, queryCrs)
+            else null
+
+            val isPassingAtStation = cifMovement?.isPass ?: false
+
+            val (cifPrev, cifSubseq) = cifMovement?.let {
+                CifRepository.getCallingPointsForService(it.uid, queryCrs)
+            } ?: (null to null)
+
+            val atocCode     = cifMovement?.atocCode ?: ""
+            val operatorName = TocData.get(atocCode)?.name ?: ""
+
+            // CIF calling points are authoritative — use them directly
+            val initPrev   = cifPrev ?: prevCallingPoints
+            val initSubseq = cifSubseq ?: subsCallingPoints
+
+            val initialDetails = ServiceDetails(
+                generatedAt             = java.time.LocalDateTime.now().toString(),
+                serviceType             = "train",
+                trainId                 = trainHeadcode,
+                rsid                    = serviceId,
+                operator                = operatorName,
+                operatorCode            = atocCode,
+                isCancelled             = false,
+                platform                = boardPlatform,
+                origin                  = origin,
+                destination             = dest,
+                previousCallingPoints   = initPrev,
+                subsequentCallingPoints = initSubseq,
+                coachCount              = boardCoaches,
+                formation               = "",
+                isPassingAtStation      = isPassingAtStation,
+                cifPreviousCallingPoints    = cifPrev ?: emptyList(),
+                cifSubsequentCallingPoints  = cifSubseq ?: emptyList()
+            )
+
+            withContext(Dispatchers.Main) {
+                cachedDetails = initialDetails
+                rebuildAdapter(initialDetails)
+                bindUnitInfo(boardUnits, boardCoaches, null)
+                viewModel.fetchCifServiceDetails(serviceId, queryCrs, initialDetails)
+            }
+        }
+
+        binding.tvServiceTitle.text = "${resolveLocationName(origin)} → $dest"
+        binding.rvCallingPoints.layoutManager = LinearLayoutManager(this)
+
+        binding.chipSimple.setOnClickListener {
+            if (showDetailed) {
+                showPassing  = false
+                showDetailed = false
+                binding.chipSimple.isChecked   = true
+                binding.chipDetailed.isChecked = false
+                binding.tvPassingNote.visibility = View.GONE
+                callingAdapter = null
+                binding.rvCallingPoints.adapter = null
+                cachedDetails?.let { rebuildAdapter(it) }
+            }
+        }
+        binding.chipDetailed.setOnClickListener {
+            if (!showDetailed) {
+                showPassing  = true
+                showDetailed = true
+                binding.chipSimple.isChecked   = false
+                binding.chipDetailed.isChecked = true
+                binding.tvPassingNote.visibility = View.VISIBLE
+                callingAdapter = null
+                binding.rvCallingPoints.adapter = null
+                cachedDetails?.let { rebuildAdapter(it) }
+            }
+        }
+
+        // Bind to live data service
+        bindService(Intent(this, DarwinService::class.java), serviceConnection, BIND_AUTO_CREATE)
+
+        // If destCrs wasn't passed, derive it from the last subsequent calling point
+        if (destCrs.isEmpty()) {
+            destCrs = subsCallingPoints.lastOrNull()?.crs ?: ""
+        }
+
+        // Start tracking this headcode for live formation + ETA updates
+        if (trainHeadcode.isNotEmpty()) viewModel.trackDetailService(trainHeadcode, subsCallingPoints)
+
+        // Poll server TRUST for all stations on this service (not just board CRS)
+        if (trainHeadcode.isNotEmpty()) viewModel.startServerTrustPolling(trainHeadcode)
+
+        // Fetch historical punctuality from HSP
+        if (trainHeadcode.isNotEmpty()) {
+            viewModel.fetchHspForDetail(trainHeadcode, queryCrs, destCrs)
+        }
+
+        observeDetailState(boardUnits, boardCoaches)
+        observeDetailLive()
+        observeVstp()
+        observeFormation()
+        observeHsp()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        unbindService(serviceConnection)
+        viewModel.clearDetailState()
+        viewModel.clearDetailTracking()
+    }
+
+    // ── Detail state observer ─────────────────────────────────────────────────
+
+    private fun observeDetailState(boardUnits: List<String>, boardCoaches: Int) {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.detailState.collect { state ->
+                    when (state) {
+                        is DetailState.Idle    -> Unit
+                        is DetailState.Loading -> {
+                            binding.progressBar.visibility  = View.VISIBLE
+                            binding.tvError.visibility      = View.GONE
+                        }
+                        is DetailState.Success -> {
+                            binding.progressBar.visibility  = View.GONE
+                            binding.tvError.visibility      = View.GONE
+                            binding.contentGroup.visibility = View.VISIBLE
+                            cachedDetails = state.details
+                            if (trainHeadcode.isEmpty()) {
+                                trainHeadcode = state.details.trainId
+                                viewModel.trackDetailService(trainHeadcode,
+                                    state.details.cifSubsequentCallingPoints
+                                        .ifEmpty { state.details.subsequentCallingPoints })
+                                viewModel.fetchHspForDetail(trainHeadcode, queryCrs, destCrs)
+                            }
+                            bindHeader(state.details, boardUnits, boardCoaches)
+                            rebuildAdapter(state.details)
+                        }
+                        is DetailState.Error   -> {
+                            binding.progressBar.visibility  = View.GONE
+                            binding.tvError.text = "Error: ${state.message}"
+                            binding.tvError.visibility      = View.VISIBLE
+                            // Keep contentGroup visible with whatever we already have
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Live formation observer ────────────────────────────────────────────────
+    // Fires whenever Darwin pushes a formation update for our headcode.
+
+    private fun observeFormation() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.detailFormation.collect { formation ->
+                    formation ?: return@collect
+                    val current = cachedDetails ?: return@collect
+                    // Update unit info section with live Darwin data
+                    bindUnitInfo(formation.units, formation.coachCount, null)
+                    // Update coach count in header if detail already loaded
+                    if (current.operator.isNotEmpty()) {
+                        bindHeader(current, formation.units, formation.coachCount)
+                    }
+                }
+            }
+        }
+    }
+
+    // ── HSP punctuality observer ───────────────────────────────────────────────
+
+    private fun observeHsp() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.hspSummary.collect { summary ->
+                    summary ?: return@collect
+                    bindPunctuality(summary)
+                }
+            }
+        }
+    }
+
+    // ── Know Your Train live observer ─────────────────────────────────────────
+
+    // ── Live TRUST overlay ────────────────────────────────────────────────────
+
+    /**
+     * Observes [MainViewModel.detailLiveState] and:
+     *  1. Updates the "currently at" banner
+     *  2. Overlays actual times, updated platforms, and cancellation state
+     *     onto the calling points list without needing a full re-fetch
+     */
+    private fun observeDetailLive() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.detailLiveState.collect { live ->
+                    updateLiveBanner(live)
+                    val d = cachedDetails ?: return@collect
+                    rebuildAdapter(d, live)
+                }
+            }
+        }
+    }
+
+    /**
+     * Watches [CifRepository.vstpAmendedUid]. If the UID matches the currently
+     * open service, re-fetches calling points from the DB (VSTP has already
+     * patched it) and rebuilds the adapter.
+     */
+    private fun observeVstp() {
+        val openUid = cachedDetails?.rsid ?: return
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                CifRepository.vstpAmendedUid.collect { amendedUid ->
+                    if (amendedUid.isNotEmpty() && amendedUid == openUid) {
+                        // Re-fetch calling points on IO thread
+                        val refreshed = withContext(Dispatchers.IO) {
+                            CifRepository.getCallingPointsForService(openUid, queryCrs)
+                        } ?: return@collect
+                        val updated = cachedDetails?.copy(
+                            cifPreviousCallingPoints    = refreshed.first,
+                            cifSubsequentCallingPoints  = refreshed.second
+                        ) ?: return@collect
+                        cachedDetails = updated
+                        rebuildAdapter(updated, viewModel.detailLiveState.value)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun updateLiveBanner(live: DetailLiveState) {
+        val hc  = trainHeadcode.uppercase()
+        val loc = viewModel.lastKnownLocations.value[hc]
+        when {
+            live.isCancelled -> {
+                binding.tvLiveLocationText.text = "Service cancelled"
+                binding.tvLiveLocationTime.text = ""
+                binding.bannerLiveLocation.visibility = View.VISIBLE
+            }
+            loc != null -> {
+                val verb = if (loc.eventType == "DEPARTURE") "Departed" else "At"
+                val delayStr = when {
+                    live.latestDelayMins > 0  -> " · +${live.latestDelayMins}m late"
+                    live.latestDelayMins < 0  -> " · ${-live.latestDelayMins}m early"
+                    else                      -> " · On time"
+                }
+                binding.tvLiveLocationText.text = "$verb ${loc.stationName}$delayStr"
+                binding.tvLiveLocationTime.text = loc.time
+                binding.bannerLiveLocation.visibility = View.VISIBLE
+            }
+            else -> binding.bannerLiveLocation.visibility = View.GONE
+        }
+    }
+
+    // ── Unit info card ────────────────────────────────────────────────────────
+
+    /**
+     * Shows class name, traction type, and unit numbers in the unit/HSP card.
+     * Called immediately with board data (units may be empty), then again when
+     * Darwin pushes a live formation.
+     *
+     * Only shows rolling stock class info when we have real Darwin unit numbers.
+     * Coach count is shown if available and valid.
+     */
+    private fun bindUnitInfo(units: List<String>, coachCount: Int, hspSummary: HspSummary?) {
+        val hasUnits   = units.isNotEmpty()
+        val hasCoaches = coachCount in 1..20
+
+        if (!hasUnits && !hasCoaches && hspSummary == null) {
+            if (binding.layoutPunctuality.visibility == View.GONE) {
+                binding.cardUnitHsp.visibility = View.GONE
+            }
+            return
+        }
+
+        binding.cardUnitHsp.visibility = View.VISIBLE
+
+        if (hasUnits) {
+            val info      = RollingStockData.infoFromUnit(units.first())
+            val className = info?.name ?: units.firstOrNull()?.let {
+                val cls = RollingStockData.classFromUnit(it)
+                if (cls != null) "Class $cls" else ""
+            } ?: ""
+            val traction  = info?.traction ?: ""
+            val classTractionLine = listOf(className, traction).filter { it.isNotEmpty() }.joinToString(" · ")
+            val unitLine  = buildString {
+                append(units.joinToString(" + "))
+                if (hasCoaches) append("  ·  ${coachCount}c")
+            }
+            binding.tvUnitAllocationLabel.text = "Unit allocation"
+            binding.tvUnitAllocationLabel.visibility = View.VISIBLE
+            binding.tvUnitAllocation.text = classTractionLine.ifEmpty { unitLine }
+            binding.tvUnitAllocation.visibility = View.VISIBLE
+            binding.tvUnitNumbers.text = if (classTractionLine.isNotEmpty()) unitLine else ""
+            binding.tvUnitNumbers.visibility = if (classTractionLine.isNotEmpty() && unitLine.isNotEmpty()) View.VISIBLE else View.GONE
+        } else if (hasCoaches) {
+            // No Darwin units yet — just show coach count, no class guessing
+            binding.tvUnitAllocationLabel.text = "Formation"
+            binding.tvUnitAllocationLabel.visibility = View.VISIBLE
+            binding.tvUnitAllocation.text = "$coachCount coaches"
+            binding.tvUnitAllocation.visibility = View.VISIBLE
+            binding.tvUnitNumbers.visibility = View.GONE
+        } else {
+            binding.tvUnitAllocationLabel.visibility = View.GONE
+            binding.tvUnitAllocation.visibility = View.GONE
+            binding.tvUnitNumbers.visibility = View.GONE
+        }
+    }
+
+    // ── Punctuality badge ─────────────────────────────────────────────────────
+
+    private fun bindPunctuality(summary: HspSummary) {
+        binding.cardUnitHsp.visibility = View.VISIBLE
+        binding.layoutPunctuality.visibility = View.VISIBLE
+
+        val pct = summary.punctualityPct
+        binding.tvPunctualityPct.text = "$pct%"
+        binding.tvPunctualitySample.text = "${summary.totalRuns} runs"
+
+        // Colour the badge: green ≥ 85%, amber ≥ 70%, red below
+        val colour = when {
+            pct >= 85 -> Color.parseColor("#2E7D32")  // dark green
+            pct >= 70 -> Color.parseColor("#E65100")  // amber/orange
+            else      -> Color.parseColor("#B71C1C")  // red
+        }
+        binding.layoutPunctuality.background.setTint(colour)
+    }
+
+    // ── Adapter ───────────────────────────────────────────────────────────────
+
+    /**
+     * Builds the calling point list, overlays live TRUST actuals/platforms and
+     * TRUST-propagated ETAs onto each point, then submits to the adapter.
+     * The overlay is purely presentational — it never modifies [cachedDetails].
+     */
+    private fun rebuildAdapter(d: ServiceDetails, live: DetailLiveState = DetailLiveState()) {
+        val allPoints = buildPointList(d).map { pt ->
+            val depActual       = live.departureActuals[pt.crs]
+            val arrActual       = live.arrivalActuals[pt.crs]
+            val updatedPlatform = live.platforms[pt.crs]
+            val isCancelledStop = pt.crs in live.cancelledStops
+
+            // A stop is "passed" once we have a confirmed actual time for it
+            val hasPassed    = depActual != null || arrActual != null
+            // For future stops, use the TRUST-propagated ETA (shown as ~HH:MM)
+            val estimatedEta = if (!hasPassed) live.estimatedEtas[pt.crs] else null
+
+            pt.copy(
+                at = when {
+                    arrActual != null -> arrActual
+                    depActual != null -> depActual
+                    else              -> pt.at
+                },
+                et = when {
+                    hasPassed            -> pt.et          // already passed — keep original
+                    estimatedEta != null -> estimatedEta   // TRUST-propagated estimate
+                    else                 -> pt.et          // original board ETA
+                },
+                platform    = updatedPlatform ?: pt.platform,
+                isCancelled = isCancelledStop || pt.isCancelled
+            )
+        }
+
+        if (allPoints.isEmpty()) {
+            binding.tvNoCallingPoints.visibility = View.VISIBLE
+            binding.rvCallingPoints.visibility   = View.GONE
+            return
+        }
+        binding.tvNoCallingPoints.visibility = View.GONE
+        binding.rvCallingPoints.visibility   = View.VISIBLE
+
+        val hc         = trainHeadcode.uppercase()
+        val passedCrs  = live.departureActuals.keys + live.arrivalActuals.keys
+        val currentCrs = viewModel.lastKnownLocations.value[hc]
+            ?.takeIf { it.eventType == "DEPARTURE" }
+            ?.crs ?: ""
+
+        if (callingAdapter == null) {
+            callingAdapter = CallingPointAdapter(
+                highlightCrs   = queryCrs,
+                showPassing    = showPassing,
+                showDetailed   = showDetailed,
+                onStationClick = { pt -> StationBoardActivity.start(this, pt.crs, pt.locationName) }
+            )
+            binding.rvCallingPoints.adapter = callingAdapter
+        }
+
+        // Pass current delay so the "Train is here" divider badge shows "+Nm late"
+        callingAdapter!!.submitFiltered(
+            points     = allPoints,
+            passedCrs  = passedCrs,
+            currentCrs = currentCrs,
+            delayMins  = live.latestDelayMins
+        )
+
+        // Show/hide overall cancellation banner
+        val allSubsCanc = d.subsequentCallingPoints.isNotEmpty() &&
+                d.subsequentCallingPoints.all {
+                    it.isCancelled || it.et.equals("Cancelled", ignoreCase = true)
+                }
+        binding.tvCancelledBanner.visibility =
+            if (live.isCancelled || d.isCancelled || allSubsCanc) View.VISIBLE else View.GONE
+    }
+
+    private fun buildPointList(d: ServiceDetails): List<CallingPoint> {
+        // In Detailed mode, use CIF calling points if available (includes passing points).
+        // In Simple mode, use LDB calling points (stopping calls only, with real times).
+        val useCif = showDetailed &&
+                (d.cifPreviousCallingPoints.isNotEmpty() || d.cifSubsequentCallingPoints.isNotEmpty())
+
+        val prevPoints = if (useCif) d.cifPreviousCallingPoints else d.previousCallingPoints
+        val subsPoints = if (useCif) d.cifSubsequentCallingPoints else d.subsequentCallingPoints
+
+        val all = ArrayList<CallingPoint>(prevPoints.size + subsPoints.size + 1)
+        all.addAll(prevPoints)
+
+        val isPassingAtStation = d.isPassingAtStation ||
+                intent.getBooleanExtra(EXTRA_IS_PASSING, false)
+
+        val alreadyPresent = all.any { it.crs == queryCrs } ||
+                subsPoints.any { it.crs == queryCrs }
+        if (!alreadyPresent && queryCrs.isNotEmpty()) {
+            val boardStd = intent.getStringExtra(EXTRA_STD) ?: ""
+            val boardEtd = intent.getStringExtra(EXTRA_ETD) ?: ""
+            val info = StationData.findByCrs(queryCrs)
+            all.add(CallingPoint(
+                locationName = info?.name ?: queryCrs,
+                crs          = queryCrs,
+                st           = boardStd.ifEmpty { "—" },
+                et           = boardEtd,
+                at           = "",
+                isCancelled  = false,
+                length       = null,
+                platform     = if (isPassingAtStation) "" else d.platform,
+                isPassing    = isPassingAtStation
+            ))
+        }
+        all.addAll(subsPoints)
+        return all
+    }
+
+    // ── Header ────────────────────────────────────────────────────────────────
+
+    private fun bindHeader(d: ServiceDetails, boardUnits: List<String>, boardCoaches: Int) {
+        val logoName = TocData.logoDrawableName(d.operatorCode).ifEmpty { TocData.logoDrawableName(d.operator) }
+        val resId    = if (logoName.isNotEmpty()) resources.getIdentifier(logoName, "drawable", packageName) else 0
+        if (resId != 0) {
+            binding.imgTocLogo.setImageResource(resId)
+            binding.imgTocLogo.visibility = View.VISIBLE
+            binding.tvTocBadge.visibility = View.GONE
+        } else {
+            binding.imgTocLogo.visibility = View.GONE
+            val label = d.operatorCode.ifEmpty { d.operator.take(4).uppercase() }
+            if (label.isNotEmpty()) {
+                binding.tvTocBadge.text = label
+                binding.tvTocBadge.background.setTint(TocData.brandColor(d.operatorCode.ifEmpty { d.operator }))
+                binding.tvTocBadge.visibility = View.VISIBLE
+            } else {
+                binding.tvTocBadge.visibility = View.GONE
+            }
+        }
+
+        binding.tvOperator.text = d.operator
+
+        val hc = d.trainId.ifEmpty { trainHeadcode }
+        binding.tvTrainId.text = hc
+        binding.tvTrainId.visibility = if (hc.isNotEmpty()) View.VISIBLE else View.GONE
+
+        binding.tvPlatform.visibility = View.GONE
+
+        val coaches = when {
+            boardCoaches in 1..20     -> boardCoaches
+            (d.coachCount ?: 0) in 1..20 -> d.coachCount
+            else -> d.subsequentCallingPoints
+                .firstOrNull { !it.isPassing && (it.length ?: 0) in 1..20 }
+                ?.length
+        }
+
+        // tvRsid shows RSID / coaches — unit detail goes in the new card
+        val rsidLine = when {
+            d.rsid.isNotEmpty() && d.rsid != hc -> buildString {
+                append("RSID: ${d.rsid}")
+                if (coaches != null) append("  ·  ${coaches} coaches")
+            }
+            coaches != null -> "${coaches} coaches"
+            else -> ""
+        }
+        binding.tvRsid.text = rsidLine
+        binding.tvRsid.visibility = if (rsidLine.isNotEmpty()) View.VISIBLE else View.GONE
+        binding.tvFormation.visibility = View.GONE
+
+        // Seed unit card with board units if Darwin hasn't pushed one yet
+        if (viewModel.detailFormation.value == null) {
+            bindUnitInfo(boardUnits, coaches ?: 0, null)
+        }
+
+        val originName = resolveLocationName(d.origin.ifEmpty { intent.getStringExtra(EXTRA_ORIGIN) ?: "" })
+        val originDep  = d.previousCallingPoints.firstOrNull()?.st
+            ?: d.subsequentCallingPoints.firstOrNull()?.st ?: ""
+        val journeyStr = if (d.journeyDurationMinutes > 0) "  ·  ${formatDuration(d.journeyDurationMinutes)}" else ""
+        val platStr    = if (d.platform.isNotEmpty()) "  ·  Plat ${d.platform}" else ""
+        binding.tvServiceSubtitle.text = when {
+            originDep.isNotEmpty() && originName.isNotEmpty() -> "Dep $originDep from $originName$platStr$journeyStr"
+            originDep.isNotEmpty()                            -> "Dep $originDep$platStr$journeyStr"
+            journeyStr.isNotEmpty()                           -> "Journey$platStr$journeyStr"
+            else                                              -> ""
+        }
+        binding.tvPlatform.visibility = View.GONE
+        binding.tvServiceSubtitle.visibility =
+            if (binding.tvServiceSubtitle.text.isNotEmpty()) View.VISIBLE else View.GONE
+
+        val reason = when {
+            d.cancelReason.isNotEmpty() -> "⚠ ${resolveCancelCode(d.cancelReason)}"
+            d.delayReason.isNotEmpty()  -> "ℹ ${resolveReasonCode(d.delayReason)}"
+            d.adhocAlerts.isNotEmpty()  -> d.adhocAlerts
+            else                        -> ""
+        }
+        binding.tvReason.text = reason
+        binding.tvReason.visibility = if (reason.isNotEmpty()) View.VISIBLE else View.GONE
+
+        val allSubsCanc = d.subsequentCallingPoints.isNotEmpty()
+                && d.subsequentCallingPoints.all {
+            it.isCancelled || it.et.equals("Cancelled", ignoreCase = true)
+        }
+        binding.tvCancelledBanner.visibility =
+            if (d.isCancelled || allSubsCanc) View.VISIBLE else View.GONE
+    }
+
+    // ── Share ─────────────────────────────────────────────────────────────────
+
+    private fun shareCurrentService() {
+        val d = cachedDetails ?: return
+        val boardUnits = intent.getStringArrayListExtra(EXTRA_UNITS) ?: emptyList<String>()
+        val formation  = viewModel.detailFormation.value
+        val liveUnits  = formation?.units ?: boardUnits
+        val journeyStr = if (d.journeyDurationMinutes > 0)
+            "\nJourney: ${formatDuration(d.journeyDurationMinutes)}" else ""
+        val unitStr = when {
+            liveUnits.isNotEmpty() -> "\nUnit: " + liveUnits.joinToString(" + ")
+            d.rsid.isNotEmpty()    -> "\nRSID: ${d.rsid}"
+            else                   -> ""
+        }
+        val hspStr = viewModel.hspSummary.value?.let {
+            "\nOn-time: ${it.punctualityPct}% (${it.totalRuns} runs)"
+        } ?: ""
+        val origin = resolveLocationName(d.origin.ifEmpty { intent.getStringExtra(EXTRA_ORIGIN) ?: "" })
+        val shareDest = resolveLocationName(d.destination)
+        val text = buildString {
+            append("$origin → $shareDest")
+            if (d.platform.isNotEmpty()) append(" · Plat ${d.platform}")
+            if (trainHeadcode.isNotEmpty()) append(" · $trainHeadcode")
+            append("\n${d.operator}")
+            append(journeyStr)
+            append(unitStr)
+            append(hspStr)
+            if (d.cancelReason.isNotEmpty()) append("\n⚠ ${resolveCancelCode(d.cancelReason)}")
+            else if (d.delayReason.isNotEmpty()) append("\nℹ ${resolveReasonCode(d.delayReason)}")
+            append("\n\nvia Train Tracker")
+        }
+        startActivity(Intent.createChooser(
+            Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, text)
+            }, "Share service"
+        ))
+    }
+}

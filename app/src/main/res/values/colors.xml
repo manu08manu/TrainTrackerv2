@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary">#1A237E</color>
+    <color name="primary_light">#3949AB</color>
+    <color name="accent">#FF6F00</color>
+    <color name="white">#FFFFFF</color>
+    <color name="white_70">#B3FFFFFF</color>
+    <color name="status_ontime">#2E7D32</color>
+    <color name="status_delayed">#E65100</color>
+    <color name="status_cancelled">#B71C1C</color>
+    <color name="passing_station">#888888</color>
+    <!-- Disruption banner -->
+    <color name="disruption_bg">#B71C1C</color>
+    <color name="disruption_text">#FFFFFF</color>
+</resources>
