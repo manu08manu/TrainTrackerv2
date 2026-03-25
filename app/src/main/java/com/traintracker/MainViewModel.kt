@@ -1,6 +1,7 @@
 package com.traintracker
 
 import androidx.lifecycle.ViewModel
+import android.util.Log
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -58,6 +59,9 @@ class MainViewModel : ViewModel() {
 
     private val _nsi = MutableStateFlow<List<KbNsiEntry>>(emptyList())
     val nsi: StateFlow<List<KbNsiEntry>> = _nsi.asStateFlow()
+
+    private val _tocDetails = MutableStateFlow<Map<String, KbTocEntry>>(emptyMap())
+    val tocDetails: StateFlow<Map<String, KbTocEntry>> = _tocDetails.asStateFlow()
 
     private val _tick = MutableStateFlow(0)
     val tick: StateFlow<Int> = _tick.asStateFlow()
@@ -123,8 +127,8 @@ class MainViewModel : ViewModel() {
     private var lastBoardType = BoardType.DEPARTURES
     private var autoRefreshJob: Job? = null
 
-    private val cifDepartures     = LinkedHashMap<String, TrainService>()
-    private val cifArrivals       = LinkedHashMap<String, TrainService>()
+    private val cifDepartures     = LinkedHashMap<String, TrainService>() // server overlay cache
+    private val cifArrivals       = LinkedHashMap<String, TrainService>() // server overlay cache
     private val formationCache    = HashMap<String, DarwinFormation>()
     private val headcodeFromTrust = HashMap<String, String>()
     private val hspCache          = HashMap<String, HspSummary>()
@@ -134,14 +138,6 @@ class MainViewModel : ViewModel() {
             while (isActive) {
                 delay(Constants.COUNTDOWN_REFRESH_SECS * 1000)
                 _tick.value++
-            }
-        }
-        viewModelScope.launch {
-            CifRepository.status.collect { status ->
-                if (status is CifRepository.Status.Ready && lastCrs.isNotEmpty()
-                    && cifDepartures.isEmpty() && cifArrivals.isEmpty()) {
-                    doFetch()
-                }
             }
         }
     }
@@ -158,6 +154,7 @@ class MainViewModel : ViewModel() {
         startAutoRefresh()
         fetchIncidents()
         fetchNsi()
+        fetchTocDetails()
     }
 
     fun refresh() { if (lastCrs.isNotEmpty()) doFetch() }
@@ -172,7 +169,7 @@ class MainViewModel : ViewModel() {
                     server.isEnabled            ->
                         buildServerBoard()   // already suspend, runs on IO internally
                     else                        ->
-                        withContext(Dispatchers.IO) { buildCifBoard() }
+                        UiState.Error("No server configured")
                 }
             } catch (e: Exception) {
                 UiState.Error(e.message ?: "Unknown error")
@@ -237,10 +234,6 @@ class MainViewModel : ViewModel() {
             BoardType.ARRIVALS -> server.getArrivals(lastCrs, windowMinutes, offset)
             BoardType.ALL      -> server.getAllServices(lastCrs, windowMinutes, offset)
             else               -> emptyList()
-        }
-
-        if (serverDeps.isEmpty() && serverArrs.isEmpty() && lastBoardType != BoardType.ALL) {
-            if (CifRepository.isReady) return buildCifBoard()
         }
 
         if (lastBoardType != BoardType.ARRIVALS) {
@@ -358,121 +351,6 @@ class MainViewModel : ViewModel() {
         )
     }
 
-    // ── CIF board (local mode — no server) ────────────────────────────────────
-
-    private fun buildCifBoard(): UiState {
-        val stationName = StationData.findByCrs(lastCrs)?.name ?: lastCrs
-        if (!CifRepository.isReady) {
-            val empty = BoardResult(stationName = stationName, crs = lastCrs,
-                services = emptyList(), generatedAt = "", boardType = lastBoardType, nrccMessages = emptyList())
-            return UiState.Success(applyFilters(empty))
-        }
-
-        val nowMins = run {
-            val c = java.util.Calendar.getInstance()
-            c.get(java.util.Calendar.HOUR_OF_DAY) * 60 + c.get(java.util.Calendar.MINUTE)
-        }
-        val winStart = (nowMins + _timeOffset.value).coerceAtLeast(0)
-        val winEnd   = (nowMins + _timeOffset.value + 120).coerceAtMost(1439)
-
-        fun inWindow(time: String): Boolean {
-            val parts = time.split(":")
-            if (parts.size != 2) return true
-            val mins = (parts[0].toIntOrNull() ?: 0) * 60 + (parts[1].toIntOrNull() ?: 0)
-            return mins in winStart..winEnd
-        }
-
-        fun buildService(m: CifMovement, bType: BoardType,
-                         existingDep: TrainService?, existingArr: TrainService?): TrainService {
-            val existing = if (bType == BoardType.ARRIVALS) existingArr else existingDep
-            val origin = m.originCrs.let { c ->
-                if (c.length == 3) StationData.findByCrs(c)?.name ?: c
-                else CorpusData.nameFromTiploc(m.originTiploc) ?: CifRepository.nameFromTiploc(m.originTiploc)
-            }
-            val dest = m.destCrs.let { c ->
-                if (c.length == 3) StationData.findByCrs(c)?.name ?: c
-                else CorpusData.nameFromTiploc(m.destTiploc) ?: CifRepository.nameFromTiploc(m.destTiploc)
-            }
-            val isPassenger  = m.trainStatus == "P" || m.trainStatus == "1"
-            val atocCode     = m.atocCode
-            val operatorName = TocData.get(atocCode)?.name ?: ""
-            val h            = m.headcode.uppercase()
-            val formation    = formationCache[h] ?: formationCache[m.uid]
-            val units        = formation?.units ?: existing?.units ?: emptyList()
-            val coaches      = formation?.coachCount ?: existing?.darwinCoachCount ?: 0
-            val (prev, subseq) = CifRepository.getCallingPointsForService(m.uid, lastCrs)
-                ?: (emptyList<CallingPoint>() to emptyList())
-            return TrainService(
-                std             = if (bType == BoardType.ARRIVALS) "" else m.displayTime,
-                etd             = if (bType == BoardType.ARRIVALS) "On time" else existing?.etd ?: "On time",
-                sta             = if (bType == BoardType.ARRIVALS) m.displayTime else "",
-                eta             = if (bType == BoardType.ARRIVALS) existing?.eta ?: "On time" else "On time",
-                destination     = dest, origin = origin,
-                platform        = existing?.platform ?: "",
-                operator        = operatorName, operatorCode = atocCode,
-                isCancelled     = existing?.isCancelled ?: false,
-                cancelReason    = existing?.cancelReason ?: "",
-                delayReason     = existing?.delayReason ?: "",
-                serviceID       = m.uid,
-                trainId         = existing?.trainId?.ifEmpty { h } ?: h,
-                boardType       = bType, serviceType = "train",
-                isPassenger     = isPassenger, isServicePassing = m.isPass,
-                actualDeparture = existing?.actualDeparture ?: "",
-                actualArrival   = existing?.actualArrival ?: "",
-                previousCallingPoints   = prev, subsequentCallingPoints = subseq,
-                units           = units, darwinCoachCount = coaches,
-                rollingStockDesc = if (formation != null)
-                    RollingStockData.describeFormation(units, coaches)
-                else existing?.rollingStockDesc ?: "",
-                unitAllocation  = if (units.isNotEmpty())
-                    RollingStockData.toUnitAllocation(units, coaches)
-                else RollingStockData.toUnitAllocation(listOf(h)),
-                tourName        = RailTourData.tourNameFor(h, m.uid, atocCode),
-                hasAlert        = existing?.hasAlert ?: false
-            )
-        }
-
-        if (lastBoardType != BoardType.ARRIVALS) {
-            val newDeps = LinkedHashMap<String, TrainService>()
-            for (m in CifRepository.getScheduledAt(lastCrs)) {
-                if (!inWindow(m.displayTime)) continue
-                val key = m.freightKey
-                newDeps[key] = buildService(m, BoardType.DEPARTURES, cifDepartures[key], null)
-            }
-            val trustOnlyDeps = cifDepartures.entries
-                .filter { it.value.serviceID.isEmpty() && !newDeps.containsKey(it.key) }
-            cifDepartures.clear(); cifDepartures.putAll(newDeps)
-            trustOnlyDeps.forEach { cifDepartures[it.key] = it.value }
-        }
-
-        if (lastBoardType != BoardType.DEPARTURES) {
-            val newArrs = LinkedHashMap<String, TrainService>()
-            for (m in CifRepository.getArrivalsAt(lastCrs)) {
-                if (!inWindow(m.displayTime)) continue
-                val key = "${m.headcode.uppercase()}-arr-${m.displayTime}"
-                newArrs[key] = buildService(m, BoardType.ARRIVALS, null, cifArrivals[key])
-            }
-            val trustOnlyArrs = cifArrivals.entries
-                .filter { it.value.serviceID.isEmpty() && !newArrs.containsKey(it.key) }
-            cifArrivals.clear(); cifArrivals.putAll(newArrs)
-            trustOnlyArrs.forEach { cifArrivals[it.key] = it.value }
-        }
-
-        val services = when (lastBoardType) {
-            BoardType.DEPARTURES -> cifDepartures.values.sortedBy { it.scheduledTime.ifEmpty { "99:99" } }
-            BoardType.ARRIVALS   -> cifArrivals.values.sortedBy { it.scheduledTime.ifEmpty { "99:99" } }
-            BoardType.ALL        -> (cifDepartures.values + cifArrivals.values)
-                .sortedBy { it.scheduledTime.ifEmpty { "99:99" } }
-        }
-
-        _availableOperators.value = services
-            .map { it.operator }.filter { it.isNotEmpty() }.distinct().sorted()
-
-        val board = BoardResult(stationName = stationName, crs = lastCrs,
-            services = services, generatedAt = "", boardType = lastBoardType, nrccMessages = emptyList())
-        return UiState.Success(applyFilters(board))
-    }
-
     private fun applyFilters(board: BoardResult): BoardResult {
         var result = board
         val op = _filterOperator.value
@@ -528,6 +406,17 @@ class MainViewModel : ViewModel() {
     }
 
     // ── KB NSI ────────────────────────────────────────────────────────────────
+
+    private fun fetchTocDetails() {
+        if (_tocDetails.value.isNotEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val list = kb.getToc()
+            if (list.isNotEmpty()) {
+                _tocDetails.value = list.associateBy { it.code.uppercase() }
+                Log.d("MainViewModel", "TOC details loaded: ${list.size} entries")
+            }
+        }
+    }
 
     fun fetchNsi() {
         viewModelScope.launch {
@@ -625,13 +514,6 @@ class MainViewModel : ViewModel() {
                         )
                     )
                 } else fallback
-            } else if (CifRepository.isReady) {
-                val (prev, subseq) = CifRepository.getCallingPointsForService(uid, atCrs)
-                    ?: (emptyList<CallingPoint>() to emptyList())
-                fallback.copy(
-                    previousCallingPoints   = prev.ifEmpty { fallback.previousCallingPoints },
-                    subsequentCallingPoints = subseq.ifEmpty { fallback.subsequentCallingPoints }
-                )
             } else {
                 fallback
             }

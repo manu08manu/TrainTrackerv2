@@ -2,7 +2,6 @@ package com.traintracker
 
 import android.util.Log
 import okhttp3.OkHttpClient
-import org.json.JSONArray
 import org.json.JSONObject
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
@@ -16,17 +15,12 @@ import java.util.concurrent.TimeUnit
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * Provider: Rail Data Marketplace (Rail Delivery Group)
- * Authentication: OAuth2 client_credentials (Consumer Key + Secret)
+ * Authentication: Either OAuth2 client_credentials (Consumer Key + Secret)
+ *                 or simple x-apikey header, depending on the product.
  * Base URL: https://api1.raildata.org.uk
  *
- * IMPORTANT — Token endpoints are per-product on RDM.
- * Each API subscription has its own OAuth2 token URL at:
- *   {product-base-path}/oauth2/token
- * These are defined in Constants.kt as KB_*_TOKEN_URL.
- * A single shared token URL will return 404.
- *
- * If an API uses simple key-only auth, leave its SECRET empty and
- * the code falls back to x-apikey header automatically.
+ * If an API uses simple key-only auth, omit secret/tokenUrl and
+ * the code uses x-apikey header automatically.
  */
 class KnowledgebaseService {
 
@@ -49,7 +43,7 @@ class KnowledgebaseService {
 
     fun getIncidents(tocCode: String? = null): List<KbIncident> {
         return try {
-            val xml = get(url = Constants.KB_INCIDENTS_URL, key = Constants.KB_INCIDENTS_KEY, secret = "", tokenUrl = "")
+            val xml = get(url = Constants.KB_INCIDENTS_URL, key = Constants.KB_INCIDENTS_KEY)
             val all = parseIncidentsXml(xml)
             if (tocCode.isNullOrBlank()) all
             else all.filter { it.operators.contains(tocCode.uppercase()) }
@@ -63,7 +57,7 @@ class KnowledgebaseService {
 
     fun getNsi(): List<KbNsiEntry> {
         return try {
-            val xml = get(url = Constants.KB_NSI_URL, key = Constants.KB_NSI_KEY, secret = "", tokenUrl = "")
+            val xml = get(url = Constants.KB_NSI_URL, key = Constants.KB_NSI_KEY)
             parseNsiXml(xml)
         } catch (e: Exception) {
             Log.w(TAG, "getNsi failed: ${e.message}")
@@ -85,14 +79,14 @@ class KnowledgebaseService {
         synchronized(stationLoadLock) {
             if (stationCache.isNotEmpty()) return
             val tocs = listOf(
-                "AW","CC","CH","CS","EM","ES","GC","GN","GR","GW","GX","HC","HT",
-                "HX","IL","LD","LE","LM","LO","ME","NT","SE","SN","SR","SW","TL","TP","VT","XC","XR"
+                "AW","CC","CH","EM","ES","GN","GR","GW","GX",
+                "HX","IL","LE","LM","LO","ME","NT","SE","SN","SR","SW","TL","TP","VT","XC","XR"
             )
             val map = HashMap<String, KbStation>(2600)
             for (toc in tocs) {
                 try {
                     val url = Constants.KB_STATIONS_URL.replace("{TOC}", toc)
-                    val xml = get(url = url, key = Constants.KB_STATIONS_KEY, secret = "", tokenUrl = "")
+                    val xml = get(url = url, key = Constants.KB_STATIONS_KEY)
                     val parsed = parseStationsXml(xml)
                     map.putAll(parsed)
                     Log.d(TAG, "KB stations: loaded ${parsed.size} for $toc")
@@ -105,7 +99,7 @@ class KnowledgebaseService {
         }
     }
 
-    // ─── TOC Data ─────────────────────────────────────────────────────────
+    // ─── TOC Data (XML) ───────────────────────────────────────────────────
 
     fun getToc(): List<KbTocEntry> {
         if (Constants.KB_TOC_KEY.isEmpty()) {
@@ -113,13 +107,8 @@ class KnowledgebaseService {
             return emptyList()
         }
         return try {
-            val json = get(
-                url      = Constants.KB_TOC_URL,
-                key      = Constants.KB_TOC_KEY,
-                secret   = Constants.KB_TOC_SECRET,
-                tokenUrl = Constants.KB_TOC_TOKEN_URL
-            )
-            parseTocJson(json)
+            val xml = get(url = Constants.KB_TOC_URL, key = Constants.KB_TOC_KEY)
+            parseTocXml(xml)
         } catch (e: Exception) {
             Log.w(TAG, "getToc failed: ${e.message}")
             emptyList()
@@ -158,7 +147,7 @@ class KnowledgebaseService {
 
     // ─── HTTP ─────────────────────────────────────────────────────────────
 
-    private fun get(url: String, key: String, secret: String, tokenUrl: String): String {
+    private fun get(url: String, key: String, secret: String = "", tokenUrl: String = ""): String {
         val requestBuilder = okhttp3.Request.Builder().url(url)
         if (secret.isNotEmpty()) {
             val token = getBearerToken(key, secret, tokenUrl)
@@ -437,33 +426,78 @@ class KnowledgebaseService {
         return map
     }
 
-    // ─── JSON parser: TOC ─────────────────────────────────────────────────
+    // ─── XML parser: TOC ──────────────────────────────────────────────────
 
-    private fun parseTocJson(json: String): List<KbTocEntry> {
+    private fun parseTocXml(xml: String): List<KbTocEntry> {
         val result = mutableListOf<KbTocEntry>()
         try {
-            val array: JSONArray = when {
-                json.trimStart().startsWith('[') -> JSONArray(json)
-                else -> {
-                    val root = JSONObject(json)
-                    root.optJSONArray("tocs")
-                        ?: root.optJSONArray("TocList")
-                        ?: root.optJSONArray("Toc")
-                        ?: return result
+            val factory = XmlPullParserFactory.newInstance()
+            factory.isNamespaceAware = false
+            val parser = factory.newPullParser()
+            parser.setInput(StringReader(xml))
+
+            var code = ""; var name = ""; var website = ""
+            var customerServicePhone = ""; var assistedTravelPhone = ""
+            var assistedTravelUrl = ""; var lostPropertyUrl = ""
+            var insideToc = false; var currentTag = ""
+            var insideCustomerService = false; var insideAssistedTravel = false
+            var insideLostProperty = false
+
+            var eventType = parser.eventType
+            while (eventType != XmlPullParser.END_DOCUMENT) {
+                when (eventType) {
+                    XmlPullParser.START_TAG -> {
+                        currentTag = parser.name ?: ""
+                        when (currentTag) {
+                            "Toc"             -> { insideToc = true; code = ""; name = ""; website = ""
+                                customerServicePhone = ""; assistedTravelPhone = ""
+                                assistedTravelUrl = ""; lostPropertyUrl = "" }
+                            "CustomerService" -> insideCustomerService = true
+                            "AssistedTravel"  -> insideAssistedTravel = true
+                            "LostProperty"    -> insideLostProperty = true
+                        }
+                    }
+                    XmlPullParser.TEXT -> {
+                        if (!insideToc) { eventType = parser.next(); continue }
+                        val text = parser.text?.trim() ?: ""
+                        if (text.isEmpty()) { eventType = parser.next(); continue }
+                        when {
+                            currentTag == "AtocCode"                                        -> code = text
+                            currentTag == "Name"                                            -> name = text
+                            currentTag == "CompanyWebsite"                                  -> website = text
+                            currentTag == "PrimaryTelephoneNumber" && insideCustomerService -> customerServicePhone = text
+                            currentTag == "PrimaryTelephoneNumber" && insideAssistedTravel  -> assistedTravelPhone = text
+                            currentTag == "Url" && insideAssistedTravel                     -> assistedTravelUrl = text
+                            currentTag == "Url" && insideLostProperty                       -> lostPropertyUrl = text
+                        }
+                    }
+                    XmlPullParser.END_TAG -> {
+                        when (parser.name) {
+                            "CustomerService" -> insideCustomerService = false
+                            "AssistedTravel"  -> insideAssistedTravel = false
+                            "LostProperty"    -> insideLostProperty = false
+                            "Toc" -> {
+                                if (insideToc && code.isNotEmpty()) {
+                                    result.add(KbTocEntry(
+                                        code                 = code,
+                                        name                 = name,
+                                        website              = website,
+                                        customerServicePhone = customerServicePhone,
+                                        assistedTravelPhone  = assistedTravelPhone,
+                                        assistedTravelUrl    = assistedTravelUrl,
+                                        lostPropertyUrl      = lostPropertyUrl
+                                    ))
+                                }
+                                insideToc = false
+                            }
+                        }
+                        currentTag = ""
+                    }
                 }
-            }
-            for (i in 0 until array.length()) {
-                val o = array.getJSONObject(i)
-                fun str(vararg keys: String): String {
-                    for (k in keys) { val v = o.optString(k, "").trim(); if (v.isNotEmpty()) return v }
-                    return ""
-                }
-                val code = str("AtocCode", "atocCode", "code")
-                val name = str("Name", "name", "TocName", "tocName")
-                if (code.isNotEmpty()) result.add(KbTocEntry(code = code, name = name))
+                eventType = parser.next()
             }
         } catch (e: Exception) {
-            Log.e(TAG, "parseTocJson error: ${e.message}")
+            Log.e(TAG, "parseTocXml error: ${e.message}")
         }
         return result
     }
@@ -522,6 +556,11 @@ data class KbStation(
 )
 
 data class KbTocEntry(
-    val code: String,
-    val name: String
+    val code:                 String,
+    val name:                 String,
+    val website:              String = "",
+    val customerServicePhone: String = "",
+    val assistedTravelPhone:  String = "",
+    val assistedTravelUrl:    String = "",
+    val lostPropertyUrl:      String = ""
 )

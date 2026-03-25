@@ -13,17 +13,8 @@ class TrainTrackerApp : Application() {
     override fun onCreate() {
         super.onCreate()
         appScope.launch {
-            val corpusJob = launch(Dispatchers.IO) { CorpusData.init(this@TrainTrackerApp) }
+            launch(Dispatchers.IO) { CorpusData.init(this@TrainTrackerApp) }
             launch(Dispatchers.IO) { StationData.init(this@TrainTrackerApp) }
-            corpusJob.join()
-
-            // If a server URL is configured, the server handles CIF — skip the local 60MB download.
-            if (Constants.SERVER_BASE_URL.isNotBlank()) {
-                CifRepository.skipToReady()
-            } else {
-                launch(Dispatchers.IO) { CifRepository.init(this@TrainTrackerApp) }
-                CifUpdateWorker.schedule(this@TrainTrackerApp)
-            }
         }
     }
 }

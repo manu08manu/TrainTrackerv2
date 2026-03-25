@@ -15,9 +15,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.traintracker.databinding.ActivityServiceDetailBinding
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class ServiceDetailActivity : AppCompatActivity() {
 
@@ -122,53 +120,29 @@ class ServiceDetailActivity : AppCompatActivity() {
         else
             (@Suppress("DEPRECATION") intent.getParcelableArrayListExtra<CallingPoint>(EXTRA_SUBS_CALLING_POINTS)) ?: emptyList()
 
-        // All services are sourced from CIF — serviceID is always a CIF UID.
-        lifecycleScope.launch(Dispatchers.IO) {
-            // CIF headcode lookup — fast DB query, tells us isPass and gives uid for calling points
-            val cifMovement = if (trainHeadcode.isNotEmpty() && queryCrs.isNotEmpty() && CifRepository.isReady)
-                CifRepository.findByHeadcode(trainHeadcode, queryCrs)
-            else null
-
-            val isPassingAtStation = cifMovement?.isPass ?: false
-
-            val (cifPrev, cifSubseq) = cifMovement?.let {
-                CifRepository.getCallingPointsForService(it.uid, queryCrs)
-            } ?: (null to null)
-
-            val atocCode     = cifMovement?.atocCode ?: ""
-            val operatorName = TocData.get(atocCode)?.name ?: ""
-
-            // CIF calling points are authoritative — use them directly
-            val initPrev   = cifPrev ?: prevCallingPoints
-            val initSubseq = cifSubseq ?: subsCallingPoints
-
             val initialDetails = ServiceDetails(
                 generatedAt             = java.time.LocalDateTime.now().toString(),
                 serviceType             = "train",
                 trainId                 = trainHeadcode,
                 rsid                    = serviceId,
-                operator                = operatorName,
-                operatorCode            = atocCode,
+                operator                = "",
+                operatorCode            = "",
                 isCancelled             = false,
                 platform                = boardPlatform,
                 origin                  = origin,
                 destination             = dest,
-                previousCallingPoints   = initPrev,
-                subsequentCallingPoints = initSubseq,
+                previousCallingPoints   = prevCallingPoints,
+                subsequentCallingPoints = subsCallingPoints,
                 coachCount              = boardCoaches,
                 formation               = "",
-                isPassingAtStation      = isPassingAtStation,
-                cifPreviousCallingPoints    = cifPrev ?: emptyList(),
-                cifSubsequentCallingPoints  = cifSubseq ?: emptyList()
+                isPassingAtStation      = intent.getBooleanExtra(EXTRA_IS_PASSING, false),
+                cifPreviousCallingPoints   = emptyList(),
+                cifSubsequentCallingPoints = emptyList()
             )
-
-            withContext(Dispatchers.Main) {
-                cachedDetails = initialDetails
-                rebuildAdapter(initialDetails)
-                bindUnitInfo(boardUnits, boardCoaches, null)
-                viewModel.fetchCifServiceDetails(serviceId, queryCrs, initialDetails)
-            }
-        }
+            cachedDetails = initialDetails
+            rebuildAdapter(initialDetails)
+            bindUnitInfo(boardUnits, boardCoaches, null)
+        viewModel.fetchCifServiceDetails(serviceId, queryCrs, initialDetails)
 
         binding.tvServiceTitle.text = "${resolveLocationName(origin)} → $dest"
         binding.rvCallingPoints.layoutManager = LinearLayoutManager(this)
@@ -219,7 +193,6 @@ class ServiceDetailActivity : AppCompatActivity() {
 
         observeDetailState(boardUnits, boardCoaches)
         observeDetailLive()
-        observeVstp()
         observeFormation()
         observeHsp()
     }
@@ -325,32 +298,6 @@ class ServiceDetailActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Watches [CifRepository.vstpAmendedUid]. If the UID matches the currently
-     * open service, re-fetches calling points from the DB (VSTP has already
-     * patched it) and rebuilds the adapter.
-     */
-    private fun observeVstp() {
-        val openUid = cachedDetails?.rsid ?: return
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                CifRepository.vstpAmendedUid.collect { amendedUid ->
-                    if (amendedUid.isNotEmpty() && amendedUid == openUid) {
-                        // Re-fetch calling points on IO thread
-                        val refreshed = withContext(Dispatchers.IO) {
-                            CifRepository.getCallingPointsForService(openUid, queryCrs)
-                        } ?: return@collect
-                        val updated = cachedDetails?.copy(
-                            cifPreviousCallingPoints    = refreshed.first,
-                            cifSubsequentCallingPoints  = refreshed.second
-                        ) ?: return@collect
-                        cachedDetails = updated
-                        rebuildAdapter(updated, viewModel.detailLiveState.value)
-                    }
-                }
-            }
-        }
-    }
 
     private fun updateLiveBanner(live: DetailLiveState) {
         val hc  = trainHeadcode.uppercase()
@@ -527,8 +474,8 @@ class ServiceDetailActivity : AppCompatActivity() {
     }
 
     private fun buildPointList(d: ServiceDetails): List<CallingPoint> {
-        // In Detailed mode, use CIF calling points if available (includes passing points).
-        // In Simple mode, use LDB calling points (stopping calls only, with real times).
+        // In Detailed mode, use server calling points if available (includes passing points).
+        // In Simple mode, use board calling points (stopping calls only, with real times).
         val useCif = showDetailed &&
                 (d.cifPreviousCallingPoints.isNotEmpty() || d.cifSubsequentCallingPoints.isNotEmpty())
 

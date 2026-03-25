@@ -22,6 +22,8 @@ class TrainAdapter(
     var nsiLookup: ((String) -> KbNsiEntry?)? = null
         set(value) { field = value; notifyDataSetChanged() }
 
+    var tocDetailLookup: ((String) -> KbTocEntry?)? = null
+
     fun submitAll(list: List<TrainService>, station: String = stationName) {
         allServices = list
         stationName = station

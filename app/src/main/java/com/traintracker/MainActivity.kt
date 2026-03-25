@@ -96,7 +96,6 @@ class MainActivity : AppCompatActivity() {
         observeNsi()
         observeTick()
         observeRecentStations()
-        observeCifStatus()
         observeHistoricDate()
 
         val lastCrs = prefs.getString("last_crs", "") ?: ""
@@ -602,112 +601,6 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-    }
-
-    private fun observeCifStatus() {
-        var parseStartMs   = 0L
-        var lastKnownTotal = getPreferences(MODE_PRIVATE).getInt("cif_last_total", 0)
-
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                CifRepository.status.collect { status ->
-                    when (status) {
-                        is CifRepository.Status.Checking -> {
-                            binding.cifLoadingOverlay.visibility = View.VISIBLE
-                            binding.tvCifLoadingStatus.text = "Checking timetable data…"
-                            binding.tvCifLoadingDetail.text = "This only happens once per day"
-                        }
-                        is CifRepository.Status.Downloading -> {
-                            binding.cifLoadingOverlay.visibility = View.VISIBLE
-                            binding.tvCifLoadingStatus.text = "Downloading timetable data…"
-                            binding.tvCifLoadingDetail.text = buildDownloadString(status)
-                        }
-                        is CifRepository.Status.Parsing -> {
-                            binding.cifLoadingOverlay.visibility = View.VISIBLE
-                            val count = status.scheduleCount
-                            if (parseStartMs == 0L) parseStartMs = System.currentTimeMillis()
-                            binding.tvCifLoadingStatus.text = "Building timetable…"
-                            if (count <= 0) {
-                                binding.tvCifLoadingDetail.text = "Please wait — this only happens once per day"
-                            } else {
-                                val elapsedMs = System.currentTimeMillis() - parseStartMs
-                                binding.tvCifLoadingDetail.text = buildEtaString(count, elapsedMs, lastKnownTotal)
-                            }
-                        }
-                        is CifRepository.Status.Ready -> {
-                            val lastParsed = (CifRepository.status.value as? CifRepository.Status.Parsing)?.scheduleCount
-                                ?: lastKnownTotal
-                            if (lastParsed > 0) {
-                                getPreferences(MODE_PRIVATE).edit()
-                                    .putInt("cif_last_total", lastParsed)
-                                    .apply()
-                            }
-                            val lastDownload = CifRepository.status.value
-                            if (lastDownload is CifRepository.Status.Downloading && lastDownload.bytesRead > 0) {
-                                getPreferences(MODE_PRIVATE).edit()
-                                    .putLong("cif_last_file_bytes", lastDownload.bytesRead)
-                                    .apply()
-                            }
-                            parseStartMs = 0L
-                            binding.cifLoadingOverlay.visibility = View.GONE
-                        }
-                        is CifRepository.Status.Error -> {
-                            parseStartMs = 0L
-                            binding.cifLoadingOverlay.visibility = View.GONE
-                        }
-                        else -> Unit
-                    }
-                }
-            }
-        }
-    }
-
-    private fun buildDownloadString(status: CifRepository.Status.Downloading): String {
-        val read  = status.bytesRead
-        val total = if (status.totalBytes > 0) status.totalBytes
-        else getPreferences(MODE_PRIVATE).getLong("cif_last_file_bytes", -1L)
-
-        val elapsedMs = System.currentTimeMillis() - status.startMs
-        if (read <= 0) return "Connecting…"
-
-        val speedBps = if (elapsedMs > 1_000) read.toDouble() / (elapsedMs / 1000.0) else 0.0
-        val speedStr = when {
-            speedBps <= 0        -> ""
-            speedBps < 1_048_576 -> "${"%.0f".format(speedBps / 1024)} KB/s"
-            else                 -> "${"%.1f".format(speedBps / 1_048_576)} MB/s"
-        }
-        val readMb = "%.1f".format(read / 1_048_576.0)
-
-        return if (total > 0) {
-            val totalMb   = "%.0f".format(total / 1_048_576.0)
-            val remaining = (total - read).coerceAtLeast(0)
-            val etaStr    = if (speedBps > 0) {
-                val etaSec = (remaining / speedBps).toLong()
-                when {
-                    etaSec <= 0  -> "almost done"
-                    etaSec < 60  -> "${etaSec}s remaining"
-                    else         -> "${etaSec / 60}m ${etaSec % 60}s remaining"
-                }
-            } else ""
-            listOfNotNull("$readMb / $totalMb MB", speedStr.ifEmpty { null }, etaStr.ifEmpty { null }).joinToString(" · ")
-        } else {
-            listOfNotNull("$readMb MB", speedStr.ifEmpty { null }).joinToString(" · ")
-        }
-    }
-
-    private fun buildEtaString(count: Int, elapsedMs: Long, lastTotal: Int): String {
-        val countStr = "%,d".format(count)
-        if (lastTotal <= 0 || elapsedMs < 2_000) return "$countStr schedules processed"
-        val rate           = count.toDouble() / elapsedMs
-        val remainingCount = (lastTotal - count).coerceAtLeast(0)
-        val remainingMs    = if (rate > 0) (remainingCount / rate).toLong() else 0L
-        val totalStr       = "~%,d".format(lastTotal)
-        val timeStr = when {
-            remainingMs <= 0     -> "almost done"
-            remainingMs < 60_000 -> "${(remainingMs / 1000).toInt()} sec remaining"
-            else                 -> "${(remainingMs / 60_000).toInt()} min remaining"
-        }
-        return "$countStr / $totalStr · $timeStr"
     }
 
     // ─── Incidents banner ─────────────────────────────────────────────────────

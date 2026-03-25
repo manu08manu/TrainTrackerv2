@@ -189,6 +189,53 @@ class StationBoardActivity : AppCompatActivity() {
             }
         )
         binding.rvTrains.layoutManager = LinearLayoutManager(this)
+
+        val swipe = object : androidx.recyclerview.widget.ItemTouchHelper.SimpleCallback(
+            0, androidx.recyclerview.widget.ItemTouchHelper.RIGHT
+        ) {
+            override fun onMove(rv: androidx.recyclerview.widget.RecyclerView,
+                                vh: androidx.recyclerview.widget.RecyclerView.ViewHolder,
+                                t:  androidx.recyclerview.widget.RecyclerView.ViewHolder) = false
+
+            override fun onSwiped(vh: androidx.recyclerview.widget.RecyclerView.ViewHolder, dir: Int) {
+                val pos     = vh.bindingAdapterPosition
+                val service = adapter.currentList.getOrNull(pos) ?: return
+                adapter.notifyItemChanged(pos)
+                val detail  = adapter.tocDetailLookup?.invoke(service.operatorCode)
+                TocInfoBottomSheet.newInstance(service, detail)
+                    .show(supportFragmentManager, "toc_info")
+            }
+
+            override fun onChildDraw(
+                c: android.graphics.Canvas,
+                recyclerView: androidx.recyclerview.widget.RecyclerView,
+                viewHolder: androidx.recyclerview.widget.RecyclerView.ViewHolder,
+                dX: Float, dY: Float, actionState: Int, isCurrentlyActive: Boolean
+            ) {
+                val item = viewHolder.itemView
+                val service = adapter.currentList.getOrNull(viewHolder.bindingAdapterPosition)
+                if (service != null && dX > 0) {
+                    val brandColor = TocData.brandColor(
+                        service.operatorCode.ifEmpty { service.operator })
+                    val paint = android.graphics.Paint().apply { color = brandColor; alpha = 180 }
+                    c.drawRect(item.left.toFloat(), item.top.toFloat(),
+                        item.left + dX, item.bottom.toFloat(), paint)
+                    val iconPaint = android.graphics.Paint().apply {
+                        color       = android.graphics.Color.WHITE
+                        textSize    = item.height * 0.45f
+                        textAlign   = android.graphics.Paint.Align.LEFT
+                        isAntiAlias = true
+                    }
+                    val textY = item.top + (item.height - iconPaint.textSize) / 2 + iconPaint.textSize
+                    c.drawText("ℹ", item.left + 24f, textY, iconPaint)
+                }
+                super.onChildDraw(c, recyclerView, viewHolder, dX, dY, actionState, isCurrentlyActive)
+            }
+
+            override fun getSwipeThreshold(viewHolder: androidx.recyclerview.widget.RecyclerView.ViewHolder) = 0.3f
+        }
+        val touchHelper = androidx.recyclerview.widget.ItemTouchHelper(swipe)
+        touchHelper.attachToRecyclerView(binding.rvTrains)
         binding.rvTrains.adapter = adapter
     }
 
@@ -243,6 +290,7 @@ class StationBoardActivity : AppCompatActivity() {
                                 binding.tvError.visibility = View.VISIBLE
                             } else {
                                 adapter.nsiLookup = { code -> viewModel.nsiForOperator(code) }
+                                adapter.tocDetailLookup = { code -> viewModel.tocDetails.value[code.uppercase()] }
                                 adapter.submitAll(state.board.services, state.board.stationName)
                             }
                             showNrccMessages(state.board.nrccMessages)
