@@ -110,7 +110,7 @@ class KnowledgebaseService {
             val xml = get(url = Constants.KB_TOC_URL, key = Constants.KB_TOC_KEY)
             parseTocXml(xml)
         } catch (e: Exception) {
-            Log.w(TAG, "getToc failed: ${e.message}")
+            Log.w(TAG, "getToc failed: ${e.message}", e)
             emptyList()
         }
     }
@@ -449,7 +449,7 @@ class KnowledgebaseService {
                     XmlPullParser.START_TAG -> {
                         currentTag = parser.name ?: ""
                         when (currentTag) {
-                            "Toc"             -> { insideToc = true; code = ""; name = ""; website = ""
+                            "TrainOperatingCompany" -> { insideToc = true; code = ""; name = ""; website = ""
                                 customerServicePhone = ""; assistedTravelPhone = ""
                                 assistedTravelUrl = ""; lostPropertyUrl = "" }
                             "CustomerService" -> insideCustomerService = true
@@ -462,21 +462,25 @@ class KnowledgebaseService {
                         val text = parser.text?.trim() ?: ""
                         if (text.isEmpty()) { eventType = parser.next(); continue }
                         when {
-                            currentTag == "AtocCode"                                        -> code = text
-                            currentTag == "Name"                                            -> name = text
-                            currentTag == "CompanyWebsite"                                  -> website = text
-                            currentTag == "PrimaryTelephoneNumber" && insideCustomerService -> customerServicePhone = text
-                            currentTag == "PrimaryTelephoneNumber" && insideAssistedTravel  -> assistedTravelPhone = text
-                            currentTag == "Url" && insideAssistedTravel                     -> assistedTravelUrl = text
-                            currentTag == "Url" && insideLostProperty                       -> lostPropertyUrl = text
+                            currentTag == "AtocCode"                                                -> code = text
+                            currentTag == "Name"                                                    -> name = text
+                            currentTag == "CompanyWebsite"                                          -> website = text
+                            currentTag == "com:PrimaryTelephoneNumber" && insideCustomerService     -> customerServicePhone = text
+                            currentTag == "com:TelNationalNumber"      && insideCustomerService
+                                    && customerServicePhone.isEmpty()                               -> customerServicePhone = text
+                            currentTag == "com:PrimaryTelephoneNumber" && insideAssistedTravel      -> assistedTravelPhone = text
+                            currentTag == "com:TelNationalNumber"      && insideAssistedTravel
+                                    && assistedTravelPhone.isEmpty()                                -> assistedTravelPhone = text
+                            currentTag == "com:Url"                    && insideAssistedTravel      -> assistedTravelUrl = text
+                            currentTag == "com:Url"                    && insideLostProperty        -> lostPropertyUrl = text
                         }
                     }
                     XmlPullParser.END_TAG -> {
                         when (parser.name) {
-                            "CustomerService" -> insideCustomerService = false
-                            "AssistedTravel"  -> insideAssistedTravel = false
-                            "LostProperty"    -> insideLostProperty = false
-                            "Toc" -> {
+                            "CustomerService"       -> insideCustomerService = false
+                            "AssistedTravel"        -> insideAssistedTravel = false
+                            "LostProperty"          -> insideLostProperty = false
+                            "TrainOperatingCompany" -> {
                                 if (insideToc && code.isNotEmpty()) {
                                     result.add(KbTocEntry(
                                         code                 = code,

@@ -202,6 +202,7 @@ class StationBoardActivity : AppCompatActivity() {
                 val service = adapter.currentList.getOrNull(pos) ?: return
                 adapter.notifyItemChanged(pos)
                 val detail  = adapter.tocDetailLookup?.invoke(service.operatorCode)
+                android.util.Log.d("TocDebug", "swipe: operatorCode='${service.operatorCode}' operator='${service.operator}' detail=$detail tocMapKeys=${viewModel.tocDetails.value.keys.sorted()}")
                 TocInfoBottomSheet.newInstance(service, detail)
                     .show(supportFragmentManager, "toc_info")
             }
@@ -233,10 +234,23 @@ class StationBoardActivity : AppCompatActivity() {
             }
 
             override fun getSwipeThreshold(viewHolder: androidx.recyclerview.widget.RecyclerView.ViewHolder) = 0.3f
+
+            override fun onSelectedChanged(viewHolder: androidx.recyclerview.widget.RecyclerView.ViewHolder?, actionState: Int) {
+                super.onSelectedChanged(viewHolder, actionState)
+                if (actionState == androidx.recyclerview.widget.ItemTouchHelper.ACTION_STATE_SWIPE) {
+                    viewHolder?.itemView?.isClickable = false
+                }
+            }
+
+            override fun clearView(recyclerView: androidx.recyclerview.widget.RecyclerView, viewHolder: androidx.recyclerview.widget.RecyclerView.ViewHolder) {
+                super.clearView(recyclerView, viewHolder)
+                viewHolder.itemView.isClickable = true
+            }
         }
         val touchHelper = androidx.recyclerview.widget.ItemTouchHelper(swipe)
         touchHelper.attachToRecyclerView(binding.rvTrains)
         binding.rvTrains.adapter = adapter
+        binding.rvTrains.setOnTouchListener(null)
     }
 
     // ── Headcode search ───────────────────────────────────────────────────────
@@ -445,17 +459,17 @@ class StationBoardActivity : AppCompatActivity() {
                                 val matchingIncident = viewModel.incidents.value
                                     .firstOrNull { inc -> entry.tocCode in inc.operators }
 
-                               val msg = if (matchingIncident != null) {
-                                if (matchingIncident.description.isNotEmpty() &&
-                                    matchingIncident.description != matchingIncident.summary)
-                                    "${matchingIncident.summary}\n\n${matchingIncident.description}"
-                                else
-                                    matchingIncident.summary
-                            } else if (entry.statusDescription.isNotEmpty()) {
-                                entry.statusDescription
-                            } else {
-                                entry.statusLabel
-                            }
+                                val msg = if (matchingIncident != null) {
+                                    if (matchingIncident.description.isNotEmpty() &&
+                                        matchingIncident.description != matchingIncident.summary)
+                                        "${matchingIncident.summary}\n\n${matchingIncident.description}"
+                                    else
+                                        matchingIncident.summary
+                                } else if (entry.statusDescription.isNotEmpty()) {
+                                    entry.statusDescription
+                                } else {
+                                    entry.statusLabel
+                                }
 
                                 val dialog = AlertDialog.Builder(this@StationBoardActivity)
                                     .setTitle(entry.tocName)

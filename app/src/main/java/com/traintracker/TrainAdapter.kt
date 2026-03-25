@@ -1,7 +1,5 @@
 package com.traintracker
 
-import android.content.Intent
-import android.graphics.Color
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -274,15 +272,15 @@ class TrainAdapter(
             }
 
             // ── Click / long-press ────────────────────────────────────────────
+            b.root.isClickable = true
+            b.root.isFocusable = false
             b.root.setOnClickListener { onServiceClick(s) }
             b.root.setOnLongClickListener {
-                val shareText = s.shareText(stationName.ifEmpty { "Train Tracker" })
-                ctx.startActivity(Intent.createChooser(
-                    Intent(Intent.ACTION_SEND).apply {
-                        type = "text/plain"
-                        putExtra(Intent.EXTRA_TEXT, shareText)
-                    }, "Share service"
-                ))
+                val detail = tocDetailLookup?.invoke(s.operatorCode.ifEmpty { s.operator })
+                val fm = (ctx as? androidx.fragment.app.FragmentActivity)?.supportFragmentManager
+                if (fm != null) {
+                    TocInfoBottomSheet.newInstance(s, detail).show(fm, "toc_info")
+                }
                 true
             }
         }

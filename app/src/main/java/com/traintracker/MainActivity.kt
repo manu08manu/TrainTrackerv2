@@ -655,7 +655,8 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.nsi.collect {
-                    adapter.nsiLookup = { code -> viewModel.nsiForOperator(code) }
+                    adapter.nsiLookup      = { code -> viewModel.nsiForOperator(code) }
+                    adapter.tocDetailLookup = { code -> viewModel.tocDetails.value[code.uppercase()] }
                 }
             }
         }
