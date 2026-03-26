@@ -31,10 +31,6 @@
         <activity android:name=".StationBoardActivity"/>
         <activity android:name=".StationInfoActivity"/>
 
-        <service
-            android:name=".DarwinService"
-            android:exported="false"/>
-
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"

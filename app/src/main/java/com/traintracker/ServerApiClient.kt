@@ -116,6 +116,90 @@ class ServerApiClient {
             }
         }
 
+    /**
+     * Fetches consist/allocation for [headcode] on [date] (ISO yyyy-MM-dd).
+     *
+     * The endpoint only accepts a 4-char headcode. When multiple services share
+     * the same headcode the server returns a JSON array. [uid] (the CIF UID,
+     * e.g. "C41070") is used to find the correct entry by matching array elements
+     * whose coreId starts with headcode+uid — the coreId format is headcode+uid+suffix
+     * so startsWith is the correct comparison. Falls back to null if no match.
+     *
+     * Returns null if the server is unreachable, returns no data, or parsing fails.
+     */
+    suspend fun getAllocation(headcode: String, date: String, uid: String = ""): AllocationInfo? =
+        withContext(Dispatchers.IO) {
+            try {
+                val url = "/api/allocation/$headcode?date=$date"
+                Log.d(TAG, "getAllocation: fetching $baseUrl$url (uid=$uid)")
+
+                val raw = getRaw(url)
+                if (raw == null) {
+                    Log.w(TAG, "getAllocation: null/unsuccessful response for $headcode")
+                    return@withContext null
+                }
+                Log.d(TAG, "getAllocation: raw response = $raw")
+
+                val json: JSONObject = when {
+                    raw.trimStart().startsWith("[") -> {
+                        val arr = JSONArray(raw)
+                        Log.d(TAG, "getAllocation: array response, length=${arr.length()}")
+                        if (arr.length() == 0) {
+                            Log.w(TAG, "getAllocation: empty array for $headcode")
+                            return@withContext null
+                        }
+                        if (uid.isEmpty()) {
+                            // No uid to disambiguate — only safe if there's exactly one result.
+                            if (arr.length() > 1) {
+                                Log.w(TAG, "getAllocation: ${arr.length()} results for $headcode but no uid to disambiguate — skipping")
+                                return@withContext null
+                            }
+                            arr.getJSONObject(0)
+                        } else {
+                            // coreId format is headcode+uid+suffix (e.g. "1S16C4107012" for headcode="1S16", uid="C41070").
+                            // Use startsWith rather than == because the suffix length varies.
+                            val expectedPrefix = "$headcode$uid"
+                            var matched: JSONObject? = null
+                            for (i in 0 until arr.length()) {
+                                val obj = arr.getJSONObject(i)
+                                if (obj.optString("coreId").startsWith(expectedPrefix)) {
+                                    matched = obj
+                                    Log.d(TAG, "getAllocation: matched coreId=${obj.optString("coreId")} via prefix=$expectedPrefix")
+                                    break
+                                }
+                            }
+                            if (matched == null) {
+                                Log.w(TAG, "getAllocation: no coreId match for prefix=$expectedPrefix in ${arr.length()} results — skipping")
+                                return@withContext null
+                            }
+                            matched
+                        }
+                    }
+                    else -> JSONObject(raw)
+                }
+
+                val info = AllocationInfo(
+                    coreId      = json.optString("coreId"),
+                    headcode    = json.optString("headcode"),
+                    serviceDate = json.optString("serviceDate"),
+                    operator    = json.optString("operator"),
+                    units       = json.optJSONArray("units")?.let { arr ->
+                        (0 until arr.length()).map { arr.getString(it) }
+                    } ?: emptyList(),
+                    vehicles    = json.optJSONArray("vehicles")?.let { arr ->
+                        (0 until arr.length()).map { arr.getString(it) }
+                    } ?: emptyList(),
+                    unitCount   = json.optInt("unitCount", 0),
+                    coachCount  = json.optInt("coachCount", 0)
+                )
+                Log.d(TAG, "getAllocation: parsed OK — units=${info.units}, coachCount=${info.coachCount}")
+                info
+            } catch (e: Exception) {
+                Log.e(TAG, "getAllocation($headcode): ${e.message}", e)
+                null
+            }
+        }
+
     suspend fun getStatus(): ServerStatus? =
         withContext(Dispatchers.IO) {
             try {
@@ -197,6 +281,14 @@ class ServerApiClient {
         if (!response.isSuccessful) return null
         return response.body?.string()?.let { JSONObject(it) }
     }
+
+    /** Like [get] but returns the raw response body string, allowing callers to decide
+     *  whether the root is a JSON object or array before parsing. */
+    private fun getRaw(path: String): String? {
+        val response = http.newCall(Request.Builder().url("$baseUrl$path").build()).execute()
+        if (!response.isSuccessful) return null
+        return response.body?.string()?.trim()
+    }
 }
 
 data class TrainLocationResult(
@@ -223,4 +315,15 @@ data class ServerStatus(
     val cifLastDownload: String?,
     val trustConnected: Boolean,
     val trainLocationsCount: Int
+)
+
+data class AllocationInfo(
+    val coreId: String,
+    val headcode: String,
+    val serviceDate: String,
+    val operator: String,
+    val units: List<String>,
+    val vehicles: List<String>,
+    val unitCount: Int,
+    val coachCount: Int
 )

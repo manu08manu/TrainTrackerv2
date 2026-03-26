@@ -1,12 +1,9 @@
 package com.traintracker
 
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.ServiceConnection
 import android.graphics.Color
 import android.os.Bundle
-import android.os.IBinder
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.InputMethodManager
@@ -21,6 +18,8 @@ import com.google.android.material.chip.Chip
 import com.google.android.material.tabs.TabLayout
 import com.traintracker.databinding.ActivityStationBoardBinding
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -33,17 +32,7 @@ class StationBoardActivity : AppCompatActivity() {
     private var currentCrs = ""
     private var currentBoardType = BoardType.ALL
 
-    private var liveService: DarwinService? = null
-    private val serviceConnection = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName, binder: IBinder) {
-            val svc = (binder as DarwinService.LocalBinder).getService()
-            liveService = svc
-            viewModel.attachAllocationFormations(svc.allocations)
-            viewModel.attachTrustMovements(svc.trustMovements, svc.trustActivations, svc.trustConnected)
-            svc.setFilterCrs(currentCrs)
-        }
-        override fun onServiceDisconnected(name: ComponentName) { liveService = null }
-    }
+
 
     // Instance of KnowledgebaseService for station lookups
     private val kbService = KnowledgebaseService()
@@ -89,13 +78,11 @@ class StationBoardActivity : AppCompatActivity() {
             viewModel.fetchBoard(currentCrs, currentBoardType)
         }
 
-        bindService(Intent(this, DarwinService::class.java), serviceConnection, BIND_AUTO_CREATE)
         viewModel.fetchBoard(currentCrs, currentBoardType)
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        unbindService(serviceConnection)
     }
 
     // ── Station info dialog ───────────────────────────────────────────────────
@@ -202,8 +189,9 @@ class StationBoardActivity : AppCompatActivity() {
                 val service = adapter.currentList.getOrNull(pos) ?: return
                 adapter.notifyItemChanged(pos)
                 val detail  = adapter.tocDetailLookup?.invoke(service.operatorCode)
+                val nsiEntry = viewModel.nsiForOperator(service.operatorCode)
                 android.util.Log.d("TocDebug", "swipe: operatorCode='${service.operatorCode}' operator='${service.operator}' detail=$detail tocMapKeys=${viewModel.tocDetails.value.keys.sorted()}")
-                TocInfoBottomSheet.newInstance(service, detail)
+                TocInfoBottomSheet.newInstance(service, detail, nsiEntry)
                     .show(supportFragmentManager, "toc_info")
             }
 
@@ -367,14 +355,31 @@ class StationBoardActivity : AppCompatActivity() {
     private fun observeIncidents() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.incidents.collect { incidents ->
+                // Re-evaluate whenever either incidents or the station's operator list changes
+                combine(viewModel.incidents, viewModel.availableOperators) { incidents, stationOperators ->
+                    Pair(incidents, stationOperators)
+                }.collect { (incidents, stationOperators) ->
                     val container = binding.incidentChipContainer
                     val toRemove = (0 until container.childCount)
                         .map { container.getChildAt(it) }
                         .filter { it.tag != "nrcc" }
                     toRemove.forEach { container.removeView(it) }
-                    val now = java.util.Date().toString()
-                    val active = incidents.filter { it.endTime.isEmpty() || it.endTime > now }
+
+                    val nowOdt = java.time.OffsetDateTime.now()
+                    val active = incidents.filter { incident ->
+                        // 1. Must not be expired
+                        val notExpired = if (incident.endTime.isEmpty()) true
+                        else try { java.time.OffsetDateTime.parse(incident.endTime).isAfter(nowOdt) }
+                        catch (_: Exception) { true }
+                        if (!notExpired) return@filter false
+
+                        // 2. Must affect an operator that serves this station.
+                        //    If the incident has no operator list, show it to everyone.
+                        //    If the station operator list isn't known yet, show everything.
+                        if (incident.operators.isEmpty() || stationOperators.isEmpty()) return@filter true
+                        incident.operators.any { it in stationOperators }
+                    }
+
                     if (active.isEmpty()) {
                         if (container.childCount == 0) binding.incidentsBanner.visibility = View.GONE
                         return@collect
@@ -412,6 +417,16 @@ class StationBoardActivity : AppCompatActivity() {
 
     // ── NSI status strip ──────────────────────────────────────────────────────
     private fun observeNsi() {
+        // Periodic refresh: re-fetch NSI every 5 minutes while the board is visible
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (true) {
+                    delay(5 * 60 * 1000L)
+                    viewModel.fetchNsi()
+                }
+            }
+        }
+
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.nsi.collect { nsiList ->
@@ -438,14 +453,19 @@ class StationBoardActivity : AppCompatActivity() {
                     }
 
                     disrupted.forEach { entry ->
+                        // Level 2 = advisory (amber), 3 = disruption (red), 4 = severe (dark red)
                         val bgColor = when (entry.statusLevel) {
-                            2    -> 0xFFE65100.toInt()
-                            3    -> 0xFFB71C1C.toInt()
-                            4    -> 0xFF4A0000.toInt()
+                            2    -> 0xFFE65100.toInt()   // amber — advisory/note
+                            3    -> 0xFFB71C1C.toInt()   // red — active disruption
+                            4    -> 0xFF4A0000.toInt()   // dark red — severe
                             else -> 0xFF555555.toInt()
                         }
+
+                        // Compact label: "TOC name · Advisory" etc, detail shown on tap
+                        val chipLabel = "${entry.statusEmoji} ${entry.tocName} · ${entry.statusLabel}"
+
                         val chip = Chip(this@StationBoardActivity).apply {
-                            text = "${entry.tocName} · ${entry.statusLabel}"
+                            text = chipLabel
                             textSize = 11f
                             chipBackgroundColor = android.content.res.ColorStateList.valueOf(bgColor)
                             setTextColor(Color.WHITE)
@@ -454,36 +474,7 @@ class StationBoardActivity : AppCompatActivity() {
                                 android.view.ViewGroup.LayoutParams.WRAP_CONTENT
                             ).apply { marginEnd = 8 }
                             setOnClickListener {
-                                // Match incident by TOC code for full description,
-                                // fall back to statusLabel if none found
-                                val matchingIncident = viewModel.incidents.value
-                                    .firstOrNull { inc -> entry.tocCode in inc.operators }
-
-                                val msg = if (matchingIncident != null) {
-                                    if (matchingIncident.description.isNotEmpty() &&
-                                        matchingIncident.description != matchingIncident.summary)
-                                        "${matchingIncident.summary}\n\n${matchingIncident.description}"
-                                    else
-                                        matchingIncident.summary
-                                } else if (entry.statusDescription.isNotEmpty()) {
-                                    entry.statusDescription
-                                } else {
-                                    entry.statusLabel
-                                }
-
-                                val dialog = AlertDialog.Builder(this@StationBoardActivity)
-                                    .setTitle(entry.tocName)
-                                    .setMessage(msg)
-                                    .setPositiveButton("OK", null)
-                                if (entry.customUrl.isNotEmpty()) {
-                                    dialog.setNeutralButton("More info") { _, _ ->
-                                        startActivity(Intent(
-                                            Intent.ACTION_VIEW,
-                                            android.net.Uri.parse(entry.customUrl)
-                                        ))
-                                    }
-                                }
-                                dialog.show()
+                                showNsiDetail(entry)
                             }
                         }
                         container.addView(chip)
@@ -491,6 +482,68 @@ class StationBoardActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun showNsiDetail(entry: KbNsiEntry) {
+        // Build message: prefer incident description, fall back to statusDescription
+        val matchingIncident = viewModel.incidents.value
+            .firstOrNull { inc -> entry.tocCode in inc.operators }
+
+        val msg = if (matchingIncident != null) {
+            if (matchingIncident.description.isNotEmpty() &&
+                matchingIncident.description != matchingIncident.summary)
+                "${matchingIncident.summary}\n\n${matchingIncident.description}"
+            else
+                matchingIncident.summary
+        } else if (entry.statusDescription.isNotEmpty()) {
+            entry.statusDescription
+        } else {
+            entry.statusLabel
+        }
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("${entry.statusEmoji} ${entry.tocName}")
+            .setMessage(msg)
+            .setPositiveButton("OK", null)
+
+        // If there are multiple disruptions, offer each as a separate action
+        when (entry.disruptions.size) {
+            0 -> { /* no links */ }
+            1 -> {
+                dialog.setNeutralButton("More info") { _, _ ->
+                    startActivity(Intent(Intent.ACTION_VIEW,
+                        android.net.Uri.parse(entry.disruptions[0].url)))
+                }
+            }
+            else -> {
+                // Multiple disruptions — show a secondary list dialog
+                dialog.setNeutralButton("View disruptions (${entry.disruptions.size})") { _, _ ->
+                    val labels = entry.disruptions.mapIndexed { i, d ->
+                        d.detail.ifEmpty { "Disruption ${i + 1}" }
+                    }.toTypedArray()
+                    AlertDialog.Builder(this)
+                        .setTitle("${entry.tocName} — Active disruptions")
+                        .setItems(labels) { _, which ->
+                            startActivity(Intent(Intent.ACTION_VIEW,
+                                android.net.Uri.parse(entry.disruptions[which].url)))
+                        }
+                        .setNegativeButton("Close", null)
+                        .show()
+                }
+            }
+        }
+
+        // Twitter live updates link
+        if (entry.twitterHandle.isNotEmpty()) {
+            dialog.setNegativeButton("Live updates @${entry.twitterHandle}") { _, _ ->
+                val handle = entry.twitterHandle
+                val twitterIntent = Intent(Intent.ACTION_VIEW,
+                    android.net.Uri.parse("https://x.com/$handle"))
+                startActivity(twitterIntent)
+            }
+        }
+
+        dialog.show()
     }
 
     private fun hideKeyboard() {

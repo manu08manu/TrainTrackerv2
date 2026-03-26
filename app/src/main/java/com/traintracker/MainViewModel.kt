@@ -120,6 +120,10 @@ class MainViewModel : ViewModel() {
     private val _detailLiveState = MutableStateFlow(DetailLiveState())
     val detailLiveState: StateFlow<DetailLiveState> = _detailLiveState.asStateFlow()
 
+    /** Consist data fetched from the server allocation endpoint. Null until loaded. */
+    private val _serverAllocation = MutableStateFlow<AllocationInfo?>(null)
+    val serverAllocation: StateFlow<AllocationInfo?> = _serverAllocation.asStateFlow()
+
     private var detailTrainId = ""
     private var detailCallingPoints: List<CallingPoint> = emptyList()
 
@@ -265,10 +269,10 @@ class MainViewModel : ViewModel() {
         }
 
         val services = when (lastBoardType) {
-            BoardType.DEPARTURES -> cifDepartures.values.sortedBy { it.scheduledTime.ifEmpty { "99:99" } }
-            BoardType.ARRIVALS   -> cifArrivals.values.sortedBy { it.scheduledTime.ifEmpty { "99:99" } }
+            BoardType.DEPARTURES -> cifDepartures.values.sortedBy { midnightAwareSortKey(it.scheduledTime) }
+            BoardType.ARRIVALS   -> cifArrivals.values.sortedBy { midnightAwareSortKey(it.scheduledTime) }
             BoardType.ALL        -> (cifDepartures.values + cifArrivals.values)
-                .sortedBy { it.scheduledTime.ifEmpty { "99:99" } }
+                .sortedBy { midnightAwareSortKey(it.scheduledTime) }
         }
 
         _availableOperators.value = services.map { it.operator }.filter { it.isNotEmpty() }.distinct().sorted()
@@ -297,7 +301,7 @@ class MainViewModel : ViewModel() {
             ?: CorpusData.nameFromTiploc(s.destTiploc)
             ?: s.destCrs ?: ""
 
-        val formation    = formationCache[h] ?: formationCache[s.uid]
+        val formation    = formationCache[h.uppercase()] ?: formationCache[s.uid.uppercase()]
         val units        = formation?.units ?: existing?.units ?: emptyList()
         val coaches      = formation?.coachCount ?: existing?.darwinCoachCount ?: 0
 
@@ -539,6 +543,7 @@ class MainViewModel : ViewModel() {
         _detailFormation.value = null
         _detailLiveState.value = DetailLiveState()
         _hspSummary.value = null
+        _serverAllocation.value = null
     }
 
     // ── HSP punctuality ───────────────────────────────────────────────────────
@@ -578,6 +583,43 @@ class MainViewModel : ViewModel() {
             _uiState.value = current.copy(board = current.board.copy(services = updated))
     }
 
+    // ── Server allocation (consist) for service detail ────────────────────────
+
+    /**
+     * Fetches consist data from GET /api/allocation/{headcode}?date={date}.
+     *
+     * The endpoint only accepts 4-char headcodes. When multiple services share
+     * the same headcode the server returns an array; [uid] (the CIF UID, e.g.
+     * "W5781406") disambiguates by matching the element whose coreId ends with it.
+     *
+     * Results are emitted to [serverAllocation]. A Darwin formation update
+     * ([detailFormation]) always takes precedence over the allocation endpoint.
+     */
+    fun fetchServerAllocation(headcode: String, date: String, uid: String = "") {
+        if (!server.isEnabled || headcode.isEmpty()) {
+            Log.w("MainViewModel", "fetchServerAllocation: skipped — enabled=${server.isEnabled}, headcode='$headcode'")
+            return
+        }
+        if (_detailFormation.value != null) {
+            Log.d("MainViewModel", "fetchServerAllocation: skipped — detailFormation already set")
+            return
+        }
+        Log.d("MainViewModel", "fetchServerAllocation: requesting headcode=$headcode uid=$uid date=$date")
+        viewModelScope.launch {
+            try {
+                val info = server.getAllocation(headcode, date, uid)
+                if (info != null) {
+                    Log.d("MainViewModel", "fetchServerAllocation: emitting units=${info.units} coaches=${info.coachCount}")
+                    _serverAllocation.value = info
+                } else {
+                    Log.w("MainViewModel", "fetchServerAllocation: got null for $headcode on $date")
+                }
+            } catch (e: Exception) {
+                Log.e("MainViewModel", "fetchServerAllocation: ${e.message}", e)
+            }
+        }
+    }
+
     // ── Server TRUST polling for service detail ──────────────────────────────
 
     /**
@@ -596,21 +638,19 @@ class MainViewModel : ViewModel() {
 
     // ── Allocation feed ───────────────────────────────────────────────────────
 
-    fun attachAllocationFormations(allocations: SharedFlow<DarwinFormation>) {
-        allocations.onEach { applyFormation(it) }.launchIn(viewModelScope)
-    }
-
     private fun applyFormation(f: DarwinFormation) {
         fun shouldUpdate(existing: DarwinFormation?) = existing == null || f.units.isNotEmpty() || existing.units.isEmpty()
-        if (f.trainId.isNotEmpty() && shouldUpdate(formationCache[f.trainId])) formationCache[f.trainId] = f
-        if (f.uid.isNotEmpty()     && shouldUpdate(formationCache[f.uid]))     formationCache[f.uid]     = f
+        // Store under uppercase keys so lookups are case-insensitive
+        if (f.trainId.isNotEmpty() && shouldUpdate(formationCache[f.trainId.uppercase()])) formationCache[f.trainId.uppercase()] = f
+        if (f.uid.isNotEmpty()     && shouldUpdate(formationCache[f.uid.uppercase()]))     formationCache[f.uid.uppercase()]     = f
         if (detailTrainId.isNotEmpty() &&
             (f.trainId.uppercase() == detailTrainId || f.uid.uppercase() == detailTrainId)) {
             _detailFormation.value = f
         }
         val current = _uiState.value as? UiState.Success ?: return
         val updated = current.board.services.map { service ->
-            val formation = formationCache[service.trainId] ?: formationCache[service.serviceID.take(6)]
+            // Look up by headcode first, then full schedule UID — both stored uppercase
+            val formation = formationCache[service.trainId.uppercase()] ?: formationCache[service.serviceID.uppercase()]
             if (formation != null) {
                 val alloc = RollingStockData.toUnitAllocation(formation.units, formation.coachCount)
                 service.copy(units = formation.units, darwinCoachCount = formation.coachCount,
@@ -779,10 +819,10 @@ class MainViewModel : ViewModel() {
         }
 
         val services = when (lastBoardType) {
-            BoardType.DEPARTURES -> cifDepartures.values.sortedBy { it.scheduledTime.ifEmpty { "99:99" } }
-            BoardType.ARRIVALS   -> cifArrivals.values.sortedBy { it.scheduledTime.ifEmpty { "99:99" } }
+            BoardType.DEPARTURES -> cifDepartures.values.sortedBy { midnightAwareSortKey(it.scheduledTime) }
+            BoardType.ARRIVALS   -> cifArrivals.values.sortedBy { midnightAwareSortKey(it.scheduledTime) }
             BoardType.ALL        -> (cifDepartures.values + cifArrivals.values)
-                .sortedBy { it.scheduledTime.ifEmpty { "99:99" } }
+                .sortedBy { midnightAwareSortKey(it.scheduledTime) }
         }
         _uiState.value = current.copy(board = applyFilters(current.board.copy(services = services)))
     }

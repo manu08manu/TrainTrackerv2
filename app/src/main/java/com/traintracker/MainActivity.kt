@@ -3,13 +3,10 @@ package com.traintracker
 import android.Manifest
 import android.app.AlertDialog
 import android.app.DatePickerDialog
-import android.content.ComponentName
 import android.content.Intent
-import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.os.Bundle
-import android.os.IBinder
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.InputMethodManager
@@ -46,18 +43,8 @@ class MainActivity : AppCompatActivity() {
     private var currentBoardType = BoardType.DEPARTURES
     private var currentCrs       = ""
 
-    // ─── Service connection (TRUST + Allocation + VSTP) ───────────────────────
-    private var liveService: DarwinService? = null
-    private val serviceConnection = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName, binder: IBinder) {
-            val svc = (binder as DarwinService.LocalBinder).getService()
-            liveService = svc
-            viewModel.attachAllocationFormations(svc.allocations)
-            viewModel.attachTrustMovements(svc.trustMovements, svc.trustActivations, svc.trustConnected)
-            if (currentCrs.isNotEmpty()) svc.setFilterCrs(currentCrs)
-        }
-        override fun onServiceDisconnected(name: ComponentName) { liveService = null }
-    }
+    // ─── Server API client (replaces DarwinService / Kafka) ─────────────────
+    private val server = ServerApiClient()
 
     // ─── Permission launchers ──────────────────────────────────────────────────
     private val locationPermissionRequest = registerForActivityResult(
@@ -110,16 +97,10 @@ class MainActivity : AppCompatActivity() {
             search()
         }
 
-        bindService(
-            Intent(this, DarwinService::class.java),
-            serviceConnection,
-            BIND_AUTO_CREATE
-        )
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        unbindService(serviceConnection)
     }
 
     // ─── Adapter ──────────────────────────────────────────────────────────────
@@ -422,7 +403,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun saveAndSearch() {
         prefs.edit { putString("last_crs", currentCrs) }
-        liveService?.setFilterCrs(currentCrs)
         updateFavouriteButton()
         val name = StationData.findByCrs(currentCrs)?.name ?: currentCrs
         viewModel.recordRecentStation(currentCrs, name)

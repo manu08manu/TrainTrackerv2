@@ -77,37 +77,6 @@
             android:gravity="center_vertical"/>
     </HorizontalScrollView>
 
-    <!-- CIF schedule banner — shown while timetable data is downloading/parsing -->
-    <LinearLayout
-        android:id="@+id/cifStatusBanner"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingHorizontal="12dp"
-        android:paddingVertical="8dp"
-        android:background="#1A1565C0"
-        android:visibility="gone">
-
-        <ProgressBar
-            android:id="@+id/cifProgressSpinner"
-            style="?android:attr/progressBarStyleSmall"
-            android:layout_width="16dp"
-            android:layout_height="16dp"
-            android:layout_marginEnd="8dp"
-            android:visibility="visible"/>
-
-        <TextView
-            android:id="@+id/tvCifStatus"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:textSize="12sp"
-            android:textColor="#1565C0"
-            android:text="Downloading timetable data — some services may not be visible yet"/>
-
-    </LinearLayout>
-
     <!-- Incidents banner — shown when active disruptions exist -->
     <LinearLayout
         android:id="@+id/incidentsBanner"

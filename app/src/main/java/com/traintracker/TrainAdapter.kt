@@ -277,9 +277,10 @@ class TrainAdapter(
             b.root.setOnClickListener { onServiceClick(s) }
             b.root.setOnLongClickListener {
                 val detail = tocDetailLookup?.invoke(s.operatorCode.ifEmpty { s.operator })
+                val nsiEntry = nsiLookup?.invoke(s.operatorCode.ifEmpty { s.operator })
                 val fm = (ctx as? androidx.fragment.app.FragmentActivity)?.supportFragmentManager
                 if (fm != null) {
-                    TocInfoBottomSheet.newInstance(s, detail).show(fm, "toc_info")
+                    TocInfoBottomSheet.newInstance(s, detail, nsiEntry).show(fm, "toc_info")
                 }
                 true
             }

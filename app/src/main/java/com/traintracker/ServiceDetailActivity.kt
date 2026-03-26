@@ -1,12 +1,9 @@
 package com.traintracker
 
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.ServiceConnection
 import android.graphics.Color
 import android.os.Bundle
-import android.os.IBinder
 import android.view.View
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
@@ -30,15 +27,7 @@ class ServiceDetailActivity : AppCompatActivity() {
     private var trainHeadcode = ""
     private var destCrs       = ""   // for HSP lookup
 
-    // ── Service binding (TRUST + Allocation) ─────────────────────────────────
-    private val serviceConnection = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName, binder: IBinder) {
-            val svc = (binder as DarwinService.LocalBinder).getService()
-            viewModel.attachTrustMovements(svc.trustMovements, svc.trustActivations, svc.trustConnected)
-            viewModel.attachAllocationFormations(svc.allocations)
-        }
-        override fun onServiceDisconnected(name: ComponentName) {}
-    }
+    // ── Server API — TRUST polling handled by MainViewModel.startServerTrustPolling ──
 
     // ── TIPLOC name resolver ─────────────────────────────────────────────────
     /** Converts a raw TIPLOC (e.g. "WDONPDS") to a readable name via CORPUS NLCDESC. */
@@ -120,28 +109,28 @@ class ServiceDetailActivity : AppCompatActivity() {
         else
             (@Suppress("DEPRECATION") intent.getParcelableArrayListExtra<CallingPoint>(EXTRA_SUBS_CALLING_POINTS)) ?: emptyList()
 
-            val initialDetails = ServiceDetails(
-                generatedAt             = java.time.LocalDateTime.now().toString(),
-                serviceType             = "train",
-                trainId                 = trainHeadcode,
-                rsid                    = serviceId,
-                operator                = "",
-                operatorCode            = "",
-                isCancelled             = false,
-                platform                = boardPlatform,
-                origin                  = origin,
-                destination             = dest,
-                previousCallingPoints   = prevCallingPoints,
-                subsequentCallingPoints = subsCallingPoints,
-                coachCount              = boardCoaches,
-                formation               = "",
-                isPassingAtStation      = intent.getBooleanExtra(EXTRA_IS_PASSING, false),
-                cifPreviousCallingPoints   = emptyList(),
-                cifSubsequentCallingPoints = emptyList()
-            )
-            cachedDetails = initialDetails
-            rebuildAdapter(initialDetails)
-            bindUnitInfo(boardUnits, boardCoaches, null)
+        val initialDetails = ServiceDetails(
+            generatedAt             = java.time.LocalDateTime.now().toString(),
+            serviceType             = "train",
+            trainId                 = trainHeadcode,
+            rsid                    = serviceId,
+            operator                = "",
+            operatorCode            = "",
+            isCancelled             = false,
+            platform                = boardPlatform,
+            origin                  = origin,
+            destination             = dest,
+            previousCallingPoints   = prevCallingPoints,
+            subsequentCallingPoints = subsCallingPoints,
+            coachCount              = boardCoaches,
+            formation               = "",
+            isPassingAtStation      = intent.getBooleanExtra(EXTRA_IS_PASSING, false),
+            cifPreviousCallingPoints   = emptyList(),
+            cifSubsequentCallingPoints = emptyList()
+        )
+        cachedDetails = initialDetails
+        rebuildAdapter(initialDetails)
+        bindUnitInfo(boardUnits, boardCoaches, null)
         viewModel.fetchCifServiceDetails(serviceId, queryCrs, initialDetails)
 
         binding.tvServiceTitle.text = "${resolveLocationName(origin)} → $dest"
@@ -173,7 +162,6 @@ class ServiceDetailActivity : AppCompatActivity() {
         }
 
         // Bind to live data service
-        bindService(Intent(this, DarwinService::class.java), serviceConnection, BIND_AUTO_CREATE)
 
         // If destCrs wasn't passed, derive it from the last subsequent calling point
         if (destCrs.isEmpty()) {
@@ -191,15 +179,41 @@ class ServiceDetailActivity : AppCompatActivity() {
             viewModel.fetchHspForDetail(trainHeadcode, queryCrs, destCrs)
         }
 
+        // Fetch consist data from the server allocation endpoint.
+        //
+        // The endpoint only accepts a 4-char headcode. When multiple services share
+        // the same headcode the server returns an array; serviceId (CIF UID) is passed
+        // as the uid so ServerApiClient can pick the right element by coreId suffix.
+        //
+        // Date: use the *service date at origin*, not today's wall-clock date.
+        // Services departing late at night (e.g. 21:46) have a serviceDate matching
+        // their origin departure day even though some stops fall after midnight.
+        // Detect this: if std hour < 06:00 AND current hour >= 20:00, use yesterday.
+        if (trainHeadcode.isNotEmpty()) {
+            val boardStd    = intent.getStringExtra(EXTRA_STD) ?: ""
+            val stdFmt      = formatTimeFromIso(boardStd).ifEmpty { boardStd }
+            val stdHour     = stdFmt.substringBefore(":").toIntOrNull() ?: 12
+            val nowHour     = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+            val serviceDate = if (stdHour < 6 && nowHour >= 20) {
+                java.time.LocalDate.now().minusDays(1).toString()
+            } else {
+                java.time.LocalDate.now().toString()
+            }
+            android.util.Log.d("ServiceDetail",
+                "fetchServerAllocation: headcode=$trainHeadcode uid=$serviceId date=$serviceDate " +
+                        "(std='$boardStd' stdHour=$stdHour nowHour=$nowHour)")
+            viewModel.fetchServerAllocation(trainHeadcode, serviceDate, serviceId)
+        }
+
         observeDetailState(boardUnits, boardCoaches)
         observeDetailLive()
         observeFormation()
         observeHsp()
+        observeServerAllocation()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        unbindService(serviceConnection)
         viewModel.clearDetailState()
         viewModel.clearDetailTracking()
     }
@@ -271,6 +285,38 @@ class ServiceDetailActivity : AppCompatActivity() {
                 viewModel.hspSummary.collect { summary ->
                     summary ?: return@collect
                     bindPunctuality(summary)
+                }
+            }
+        }
+    }
+
+    // ── Server allocation (consist) observer ──────────────────────────────────
+
+    /**
+     * Observes [MainViewModel.serverAllocation] and feeds unit/coach data into
+     * [bindUnitInfo].
+     *
+     * Only applies if Darwin hasn't already pushed a live formation — Darwin data
+     * is always preferred since it reflects real-time consist changes.
+     */
+    private fun observeServerAllocation() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.serverAllocation.collect { info ->
+                    android.util.Log.d("ServiceDetail", "serverAllocation emitted: $info")
+                    info ?: return@collect
+                    if (viewModel.detailFormation.value != null) {
+                        android.util.Log.d("ServiceDetail", "serverAllocation: skipped — detailFormation already set")
+                        return@collect
+                    }
+                    android.util.Log.d("ServiceDetail", "serverAllocation: binding units=${info.units} coaches=${info.coachCount}")
+                    bindUnitInfo(info.units, info.coachCount, null)
+                    val d = cachedDetails
+                    val boardUnits   = intent.getStringArrayListExtra(EXTRA_UNITS) ?: emptyList<String>()
+                    val boardCoaches = intent.getIntExtra(EXTRA_COACHES, 0).takeIf { it in 1..20 } ?: 0
+                    if (d != null && d.operator.isNotEmpty()) {
+                        bindHeader(d, info.units.ifEmpty { boardUnits }, info.coachCount.takeIf { it > 0 } ?: boardCoaches)
+                    }
                 }
             }
         }
@@ -560,8 +606,10 @@ class ServiceDetailActivity : AppCompatActivity() {
         binding.tvRsid.visibility = if (rsidLine.isNotEmpty()) View.VISIBLE else View.GONE
         binding.tvFormation.visibility = View.GONE
 
-        // Seed unit card with board units if Darwin hasn't pushed one yet
-        if (viewModel.detailFormation.value == null) {
+        // Only seed the unit card from board data if neither the server allocation
+        // nor a Darwin formation has already populated it. Otherwise we'd erase
+        // the richer consist data that arrived asynchronously.
+        if (viewModel.detailFormation.value == null && viewModel.serverAllocation.value == null) {
             bindUnitInfo(boardUnits, coaches ?: 0, null)
         }
 

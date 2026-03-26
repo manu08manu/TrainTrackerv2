@@ -65,39 +65,32 @@ class KnowledgebaseService {
         }
     }
 
-    // ─── Stations (XML, per-TOC, cached) ──────────────────────────────────
+    // ─── Stations (XML, per-CRS, cached) ──────────────────────────────────
 
     fun getStation(crs: String): KbStation? {
-        ensureStationsLoaded()
-        return stationCache[crs.uppercase()]
-    }
-
-    fun preloadStations() = ensureStationsLoaded()
-
-    private fun ensureStationsLoaded() {
-        if (stationCache.isNotEmpty()) return
-        synchronized(stationLoadLock) {
-            if (stationCache.isNotEmpty()) return
-            val tocs = listOf(
-                "AW","CC","CH","EM","ES","GN","GR","GW","GX",
-                "HX","IL","LE","LM","LO","ME","NT","SE","SN","SR","SW","TL","TP","VT","XC","XR"
-            )
-            val map = HashMap<String, KbStation>(2600)
-            for (toc in tocs) {
-                try {
-                    val url = Constants.KB_STATIONS_URL.replace("{TOC}", toc)
-                    val xml = get(url = url, key = Constants.KB_STATIONS_KEY)
-                    val parsed = parseStationsXml(xml)
-                    map.putAll(parsed)
-                    Log.d(TAG, "KB stations: loaded ${parsed.size} for $toc")
-                } catch (e: Exception) {
-                    Log.w(TAG, "KB stations: failed for $toc — ${e.message}")
+        val key = crs.uppercase()
+        stationCache[key]?.let { return it }
+        return try {
+            val url = Constants.KB_STATIONS_URL.replace("{CRS}", key)
+            val xml = get(url = url, key = Constants.KB_STATIONS_KEY)
+            val parsed = parseStationXml(xml)
+            if (parsed != null) {
+                synchronized(stationLoadLock) {
+                    val updated = HashMap(stationCache)
+                    updated[key] = parsed
+                    stationCache = updated
                 }
+                Log.d(TAG, "KB stations: loaded $key")
             }
-            stationCache = map
-            Log.d(TAG, "KB stations: total loaded ${map.size}")
+            parsed
+        } catch (e: Exception) {
+            Log.w(TAG, "KB stations: failed for $key — ${e.message}")
+            null
         }
     }
+
+    /** No-op — preloading is no longer applicable with per-CRS fetch. Kept for API compatibility. */
+    fun preloadStations() = Unit
 
     // ─── TOC Data (XML) ───────────────────────────────────────────────────
 
@@ -174,18 +167,26 @@ class KnowledgebaseService {
             var isPlanned = false; var startTime = ""; var endTime = ""
             val operators = mutableListOf<String>()
             var insideIncident = false
+            // Track whether we're inside ValidityPeriod so we can pick up EndTime correctly.
+            // The XML uses <com:EndTime> inside <ValidityPeriod> for the expiry date.
+            var insideValidity = false
             var currentTag = ""
 
             var eventType = parser.eventType
             while (eventType != XmlPullParser.END_DOCUMENT) {
                 when (eventType) {
                     XmlPullParser.START_TAG -> {
-                        currentTag = parser.name ?: ""
-                        if (currentTag == "Incident") {
-                            insideIncident = true
-                            id = ""; summary = ""; description = ""
-                            isPlanned = false; startTime = ""; endTime = ""
-                            operators.clear()
+                        // Strip any namespace prefix (e.g. "com:EndTime" → "EndTime")
+                        currentTag = (parser.name ?: "").substringAfterLast(':')
+                        when (currentTag) {
+                            // Real element name in the feed is <PtIncident>, not <Incident>
+                            "PtIncident" -> {
+                                insideIncident = true
+                                id = ""; summary = ""; description = ""
+                                isPlanned = false; startTime = ""; endTime = ""
+                                operators.clear()
+                            }
+                            "ValidityPeriod" -> insideValidity = true
                         }
                     }
                     XmlPullParser.TEXT -> {
@@ -193,27 +194,34 @@ class KnowledgebaseService {
                         val text = parser.text?.trim() ?: ""
                         when (currentTag) {
                             "IncidentNumber" -> id = text
-                            "Summary"        -> summary = text
+                            "Summary"        -> if (summary.isEmpty()) summary = text
                             "Description"    -> description = android.text.Html.fromHtml(
                                 text, android.text.Html.FROM_HTML_MODE_COMPACT
                             ).toString().trim()
-                            "IsPlanned"      -> isPlanned = text.equals("true", ignoreCase = true)
-                            "StartTime"      -> startTime = text
-                            "ClearanceTime"  -> endTime = text
-                            "Code"           -> if (text.length in 2..4) operators.add(text.uppercase())
+                            // Feed uses <Planned> not <IsPlanned>
+                            "Planned"        -> isPlanned = text.equals("true", ignoreCase = true)
+                            // StartTime / EndTime live inside <ValidityPeriod>
+                            "StartTime"      -> if (insideValidity && startTime.isEmpty()) startTime = text
+                            "EndTime"        -> if (insideValidity && endTime.isEmpty()) endTime = text
+                            // Feed uses <OperatorRef> (the 2-letter code), not <Code>
+                            "OperatorRef"    -> if (text.length in 2..4) operators.add(text.uppercase())
                         }
                     }
                     XmlPullParser.END_TAG -> {
-                        if (parser.name == "Incident" && insideIncident) {
-                            val isCleared = endTime.isNotEmpty() && try {
-                                java.time.OffsetDateTime.parse(endTime)
-                                    .isBefore(java.time.OffsetDateTime.now())
-                            } catch (_: Exception) { false }
-                            if (!isCleared) {
-                                result.add(KbIncident(id, summary, description,
-                                    isPlanned, startTime, endTime, operators.toList()))
+                        val tag = (parser.name ?: "").substringAfterLast(':')
+                        when {
+                            tag == "ValidityPeriod" -> insideValidity = false
+                            tag == "PtIncident" && insideIncident -> {
+                                val isCleared = endTime.isNotEmpty() && try {
+                                    java.time.OffsetDateTime.parse(endTime)
+                                        .isBefore(java.time.OffsetDateTime.now())
+                                } catch (_: Exception) { false }
+                                if (!isCleared) {
+                                    result.add(KbIncident(id, summary, description,
+                                        isPlanned, startTime, endTime, operators.toList()))
+                                }
+                                insideIncident = false
                             }
-                            insideIncident = false
                         }
                         currentTag = ""
                     }
@@ -237,19 +245,28 @@ class KnowledgebaseService {
             parser.setInput(StringReader(xml))
 
             var tocCode = ""; var tocName = ""; var statusText = ""; var statusImage = ""
-            var insideToc = false
+            var insideToc = false; var insideServiceGroup = false
             var currentTag = ""
-            var statusDescription = ""; var customUrl = ""
+            var statusDescription = ""; var twitterAccount = ""; var additionalInfo = ""
+            var currentGroupDetail = ""; var currentGroupUrl = ""
+            val disruptions = mutableListOf<NsiDisruption>()
 
             var eventType = parser.eventType
             while (eventType != XmlPullParser.END_DOCUMENT) {
                 when (eventType) {
                     XmlPullParser.START_TAG -> {
-                        currentTag = parser.name ?: ""
-                        if (currentTag == "TOC") {
-                            insideToc = true
-                            tocCode = ""; tocName = ""; statusText = ""; statusImage = ""
-                            statusDescription = ""; customUrl = ""
+                        currentTag = (parser.name ?: "").substringAfterLast(':')
+                        when (currentTag) {
+                            "TOC" -> {
+                                insideToc = true
+                                tocCode = ""; tocName = ""; statusText = ""; statusImage = ""
+                                statusDescription = ""; twitterAccount = ""; additionalInfo = ""
+                                disruptions.clear()
+                            }
+                            "ServiceGroup" -> {
+                                insideServiceGroup = true
+                                currentGroupDetail = ""; currentGroupUrl = ""
+                            }
                         }
                     }
                     XmlPullParser.TEXT -> {
@@ -261,34 +278,53 @@ class KnowledgebaseService {
                             "Status"            -> statusText = text
                             "StatusImage"       -> statusImage = text
                             "StatusDescription" -> statusDescription = text
-                            "CustomURL"         -> if (customUrl.isEmpty()) customUrl = text
+                            "TwitterAccount"    -> twitterAccount = text
+                            "AdditionalInfo"    -> additionalInfo = text
+                            "CustomDetail"      -> if (insideServiceGroup) currentGroupDetail = text
+                            "CustomURL"         -> if (insideServiceGroup) currentGroupUrl = text
                         }
                     }
                     XmlPullParser.END_TAG -> {
-                        if (parser.name == "TOC" && insideToc) {
-                            val level = when {
-                                statusText.equals("Good service", ignoreCase = true) -> "1"
-                                statusImage.contains("tick", ignoreCase = true)      -> "1"
-                                statusText.contains("minor", ignoreCase = true)      -> "2"
-                                statusImage.contains("minor", ignoreCase = true)     -> "2"
-                                statusText.contains("severe", ignoreCase = true)     -> "4"
-                                statusImage.contains("severe", ignoreCase = true)    -> "4"
-                                statusText.contains("major", ignoreCase = true) ||
-                                        statusText.equals("Custom", ignoreCase = true) ||
-                                        statusImage.contains("disruption", ignoreCase = true) -> "3"
-                                else -> "1"
+                        when ((parser.name ?: "").substringAfterLast(':')) {
+                            "ServiceGroup" -> {
+                                if (insideServiceGroup && currentGroupUrl.isNotEmpty()) {
+                                    disruptions.add(NsiDisruption(
+                                        detail = currentGroupDetail,
+                                        url    = currentGroupUrl
+                                    ))
+                                }
+                                insideServiceGroup = false
+                                currentGroupDetail = ""; currentGroupUrl = ""
                             }
-                            val code = tocCode.ifEmpty { TocData.codeFromName(tocName) }
-                            if (code.isNotEmpty()) {
-                                result.add(KbNsiEntry(
-                                    tocCode           = code,
-                                    tocName           = tocName,
-                                    status            = level,
-                                    statusDescription = statusDescription,
-                                    customUrl         = customUrl
-                                ))
+                            "TOC" -> if (insideToc) {
+                                val level = when {
+                                    statusText.equals("Good service", ignoreCase = true) -> 1
+                                    statusImage.contains("tick", ignoreCase = true)      -> 1
+                                    statusText.contains("minor", ignoreCase = true)      -> 2
+                                    statusImage.contains("minor", ignoreCase = true)     -> 2
+                                    statusText.contains("severe", ignoreCase = true)     -> 4
+                                    statusImage.contains("severe", ignoreCase = true)    -> 4
+                                    // Distinguish advisory note from active disruption
+                                    statusImage.contains("note", ignoreCase = true)      -> 2
+                                    statusText.contains("major", ignoreCase = true) ||
+                                            statusText.equals("Custom", ignoreCase = true) ||
+                                            statusImage.contains("disruption", ignoreCase = true) -> 3
+                                    else -> 1
+                                }
+                                val code = tocCode.ifEmpty { TocData.codeFromName(tocName) }
+                                if (code.isNotEmpty()) {
+                                    result.add(KbNsiEntry(
+                                        tocCode           = code,
+                                        tocName           = tocName,
+                                        status            = level.toString(),
+                                        statusDescription = statusDescription,
+                                        disruptions       = disruptions.toList(),
+                                        twitterHandle     = twitterAccount,
+                                        additionalInfo    = additionalInfo
+                                    ))
+                                }
+                                insideToc = false
                             }
-                            insideToc = false
                         }
                         currentTag = ""
                     }
@@ -301,7 +337,14 @@ class KnowledgebaseService {
         return result
     }
 
-    // ─── XML parser: Stations ─────────────────────────────────────────────
+    // ─── XML parser: Station (single CRS) ────────────────────────────────
+
+    private fun parseStationXml(xml: String): KbStation? {
+        val map = parseStationsXml(xml)
+        return map.values.firstOrNull()
+    }
+
+    // ─── XML parser: Stations (reused internally) ─────────────────────────
 
     private fun parseStationsXml(xml: String): Map<String, KbStation> {
         val map = HashMap<String, KbStation>()
@@ -519,24 +562,46 @@ data class KbIncident(
     val operators: List<String>
 )
 
+data class NsiDisruption(
+    val detail: String,
+    val url: String
+)
+
 data class KbNsiEntry(
     val tocCode: String,
     val tocName: String,
     val status: String,
     val statusDescription: String = "",
-    val customUrl: String = ""
+    val disruptions: List<NsiDisruption> = emptyList(),
+    val twitterHandle: String = "",
+    val additionalInfo: String = ""
 ) {
     val statusLevel: Int get() = status.toIntOrNull() ?: 1
-    val isGood:   Boolean get() = statusLevel == 1
-    val isMinor:  Boolean get() = statusLevel == 2
-    val isMajor:  Boolean get() = statusLevel == 3
-    val isSevere: Boolean get() = statusLevel == 4
+    val isGood:      Boolean get() = statusLevel == 1
+    val isAdvisory:  Boolean get() = statusLevel == 2
+    val isDisrupted: Boolean get() = statusLevel == 3
+    val isSevere:    Boolean get() = statusLevel == 4
+
+    // Keep legacy aliases so existing call-sites don't break
+    val isMinor: Boolean get() = isAdvisory
+    val isMajor: Boolean get() = isDisrupted
+
+    /** The first disruption URL, for backwards-compatibility with single-URL consumers. */
+    val customUrl: String get() = disruptions.firstOrNull()?.url ?: ""
+
     val statusLabel: String get() = when (statusLevel) {
         1 -> "Good service"
-        2 -> "Minor delays"
-        3 -> "Major delays"
+        2 -> "Advisory"
+        3 -> "Disruption"
         4 -> "Severe disruption"
         else -> "Unknown"
+    }
+    val statusEmoji: String get() = when (statusLevel) {
+        1 -> "✓"
+        2 -> "⚠"
+        3 -> "🚨"
+        4 -> "🚫"
+        else -> ""
     }
 }
 

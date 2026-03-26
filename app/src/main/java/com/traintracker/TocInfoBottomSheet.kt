@@ -24,8 +24,9 @@ class TocInfoBottomSheet : BottomSheetDialogFragment() {
         private const val ARG_WEBSITE  = "website"
         private const val ARG_AT_URL   = "at_url"
         private const val ARG_LP_URL   = "lp_url"
+        private const val ARG_TWITTER  = "twitter"
 
-        fun newInstance(service: TrainService, detail: KbTocEntry?): TocInfoBottomSheet {
+        fun newInstance(service: TrainService, detail: KbTocEntry?, nsiEntry: KbNsiEntry? = null): TocInfoBottomSheet {
             val brandColor = TocData.brandColor(service.operatorCode.ifEmpty { service.operator })
             return TocInfoBottomSheet().apply {
                 arguments = Bundle().apply {
@@ -37,6 +38,7 @@ class TocInfoBottomSheet : BottomSheetDialogFragment() {
                     putString(ARG_WEBSITE,  detail?.website ?: "")
                     putString(ARG_AT_URL,   detail?.assistedTravelUrl ?: "")
                     putString(ARG_LP_URL,   detail?.lostPropertyUrl ?: "")
+                    putString(ARG_TWITTER,  nsiEntry?.twitterHandle ?: "")
                 }
             }
         }
@@ -53,6 +55,7 @@ class TocInfoBottomSheet : BottomSheetDialogFragment() {
         val website    = args.getString(ARG_WEBSITE, "")
         val atUrl      = args.getString(ARG_AT_URL, "")
         val lpUrl      = args.getString(ARG_LP_URL, "")
+        val twitter    = args.getString(ARG_TWITTER, "")
 
         val onBrand = if (ColorUtils.calculateLuminance(brandColor) < 0.4)
             Color.WHITE else Color.BLACK
@@ -151,6 +154,11 @@ class TocInfoBottomSheet : BottomSheetDialogFragment() {
             lpUrl.removePrefix("https://").removePrefix("http://")) {
             startActivity(Intent(Intent.ACTION_VIEW,
                 Uri.parse(if (lpUrl.startsWith("http")) lpUrl else "https://$lpUrl")))
+        }
+        addRow("𝕏", "Live updates",
+            if (twitter.isNotEmpty()) "@$twitter" else "") {
+            startActivity(Intent(Intent.ACTION_VIEW,
+                Uri.parse("https://x.com/$twitter")))
         }
 
         if (body.childCount == 0) {

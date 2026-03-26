@@ -237,13 +237,12 @@ object CifRepository {
     }
 
     private suspend fun downloadAndIndexInternal(database: CifDb) {
-        val url = try { Constants.SCHEDULE_URL } catch (_: Exception) { "" }
-        if (url.isEmpty()) { _status.value = Status.Error("SCHEDULE_URL not configured"); return }
-        val username = try { Constants.SCHEDULE_USERNAME } catch (_: Exception) { "" }
-        val password = try { Constants.SCHEDULE_PASSWORD } catch (_: Exception) { "" }
-        val request = Request.Builder().url(url).apply {
-            if (username.isNotEmpty()) addHeader("Authorization", okhttp3.Credentials.basic(username, password))
-        }.build()
+        // CIF download is handled server-side — this path should never be reached
+        // when SERVER_BASE_URL is configured (skipToReady() is called instead).
+        _status.value = Status.Error("CIF download runs server-side — check SERVER_BASE_URL")
+        return
+        @Suppress("UNREACHABLE_CODE")
+        val request = okhttp3.Request.Builder().url("").build()
 
         var lastException: Exception? = null
         for (attempt in 1..3) {

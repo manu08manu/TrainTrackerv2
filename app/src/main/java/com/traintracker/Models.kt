@@ -43,6 +43,27 @@ private fun timeToMinutes(t: String): Int {
     } catch (_: NumberFormatException) { -1 }
 }
 
+/**
+ * Sort key for a scheduled time string that handles services past midnight correctly.
+ *
+ * The board shows services across a ~6-hour window. Services between 00:00–05:59
+ * that appear on a late-night board (current time ≥ 20:00) are post-midnight and
+ * should sort after all same-day services rather than jumping to the top.
+ *
+ * Returns minutes-of-day offset so that e.g. 00:05 viewed at 23:50 sorts as 1445
+ * rather than 5, keeping it after 23:50 (1430) on the board.
+ */
+fun midnightAwareSortKey(scheduledTime: String): Int {
+    val formatted = formatTimeFromIso(scheduledTime).ifEmpty { scheduledTime }
+    val mins = timeToMinutes(formatted)
+    if (mins < 0) return 9999          // missing time → sink to bottom
+    val cal = Calendar.getInstance()
+    val nowMins = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
+    // If it's late evening and the service is in the small hours, it's next-day:
+    // offset by +1440 so it sorts after all today's services.
+    return if (nowMins >= 20 * 60 && mins < 6 * 60) mins + 1440 else mins
+}
+
 fun minutesUntilTime(timeStr: String): Int {
     val formatted = formatTimeFromIso(timeStr).ifEmpty { timeStr }
     val target = timeToMinutes(formatted)
@@ -77,7 +98,7 @@ internal fun addMinutesToTime(time: String, delayMins: Int): String {
     if (colon < 0) return time
     return try {
         val baseMins = formatted.substring(0, colon).toInt() * 60 +
-                       formatted.substring(colon + 1, colon + 3).toInt()
+                formatted.substring(colon + 1, colon + 3).toInt()
         val resultMins = (baseMins + delayMins).let {
             when {
                 it < 0     -> it + 1440
@@ -489,4 +510,27 @@ data class HspSummary(
     val totalRuns: Int,
     val onTimeCount: Int,           // within 5 minutes
     val punctualityPct: Int         // 0–100
+)
+// ─── TrustMovement / TrustActivation ─────────────────────────────────────────
+// Previously defined in TrustClient.kt — moved here as that file was deleted
+// when Kafka consumers moved server-side.
+
+data class TrustMovement(
+    val type: String,           // "ARRIVAL" or "DEPARTURE"
+    val trainUid: String,
+    val trainId: String,
+    val headcode: String,
+    val stanox: String,
+    val crs: String,
+    val scheduledTime: String,
+    val actualTime: String,
+    val platform: String,
+    val isCancelled: Boolean,
+    val delayMinutes: Int = 0
+)
+
+data class TrustActivation(
+    val trainUid: String,
+    val headcode: String,
+    val originDep: String       // scheduled departure time at origin e.g. "0743"
 )
