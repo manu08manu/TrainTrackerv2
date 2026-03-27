@@ -73,6 +73,7 @@ class KnowledgebaseService {
         return try {
             val url = Constants.KB_STATIONS_URL.replace("{CRS}", key)
             val xml = get(url = url, key = Constants.KB_STATIONS_KEY)
+            Log.d(TAG, "KB stations XML for $key: ${xml.take(500)}")
             val parsed = parseStationXml(xml)
             if (parsed != null) {
                 synchronized(stationLoadLock) {
@@ -167,8 +168,6 @@ class KnowledgebaseService {
             var isPlanned = false; var startTime = ""; var endTime = ""
             val operators = mutableListOf<String>()
             var insideIncident = false
-            // Track whether we're inside ValidityPeriod so we can pick up EndTime correctly.
-            // The XML uses <com:EndTime> inside <ValidityPeriod> for the expiry date.
             var insideValidity = false
             var currentTag = ""
 
@@ -176,10 +175,8 @@ class KnowledgebaseService {
             while (eventType != XmlPullParser.END_DOCUMENT) {
                 when (eventType) {
                     XmlPullParser.START_TAG -> {
-                        // Strip any namespace prefix (e.g. "com:EndTime" → "EndTime")
                         currentTag = (parser.name ?: "").substringAfterLast(':')
                         when (currentTag) {
-                            // Real element name in the feed is <PtIncident>, not <Incident>
                             "PtIncident" -> {
                                 insideIncident = true
                                 id = ""; summary = ""; description = ""
@@ -198,12 +195,9 @@ class KnowledgebaseService {
                             "Description"    -> description = android.text.Html.fromHtml(
                                 text, android.text.Html.FROM_HTML_MODE_COMPACT
                             ).toString().trim()
-                            // Feed uses <Planned> not <IsPlanned>
                             "Planned"        -> isPlanned = text.equals("true", ignoreCase = true)
-                            // StartTime / EndTime live inside <ValidityPeriod>
                             "StartTime"      -> if (insideValidity && startTime.isEmpty()) startTime = text
                             "EndTime"        -> if (insideValidity && endTime.isEmpty()) endTime = text
-                            // Feed uses <OperatorRef> (the 2-letter code), not <Code>
                             "OperatorRef"    -> if (text.length in 2..4) operators.add(text.uppercase())
                         }
                     }
@@ -304,11 +298,10 @@ class KnowledgebaseService {
                                     statusImage.contains("minor", ignoreCase = true)     -> 2
                                     statusText.contains("severe", ignoreCase = true)     -> 4
                                     statusImage.contains("severe", ignoreCase = true)    -> 4
-                                    // Distinguish advisory note from active disruption
                                     statusImage.contains("note", ignoreCase = true)      -> 2
-                                    statusText.contains("major", ignoreCase = true) ||
+                                    (statusText.contains("major", ignoreCase = true) ||
                                             statusText.equals("Custom", ignoreCase = true) ||
-                                            statusImage.contains("disruption", ignoreCase = true) -> 3
+                                            statusImage.contains("disruption", ignoreCase = true)) -> 3
                                     else -> 1
                                 }
                                 val code = tocCode.ifEmpty { TocData.codeFromName(tocName) }
@@ -370,23 +363,39 @@ class KnowledgebaseService {
             val addressLines = mutableListOf<String>()
             var postCode = ""
 
+            var inTicketOfficeOpen = false
+            var inWaitingRoomOpen = false
+
             val tagStack = ArrayDeque<String>()
 
             var eventType = parser.eventType
             while (eventType != XmlPullParser.END_DOCUMENT) {
                 when (eventType) {
                     XmlPullParser.START_TAG -> {
-                        val tag = parser.name ?: ""
+                        val rawTag = parser.name ?: ""
+                        val tag = rawTag.substringAfterLast(':')
                         tagStack.addLast(tag)
-                        if (tag == "Station") {
-                            inStation = true
-                            crs = ""; name = ""; telephone = ""
-                            staffingLevel = ""; cctv = ""
-                            ticketOfficeAvail = ""; ticketMachineAvail = ""
-                            waitingRoom = ""; toilets = ""; wifi = ""
-                            stepFreeAccess = ""; assistanceAvail = ""
-                            taxiAvail = ""; carParkSpaces = ""
-                            addressLines.clear(); postCode = ""
+                        val parent = tagStack.dropLast(1).lastOrNull() ?: ""
+                        when {
+                            tag == "StationV4.0" -> {
+                                inStation = true
+                                crs = ""; name = ""; telephone = ""
+                                staffingLevel = ""; cctv = ""
+                                ticketOfficeAvail = ""; ticketMachineAvail = ""
+                                waitingRoom = ""; toilets = ""; wifi = ""
+                                stepFreeAccess = ""; assistanceAvail = ""
+                                taxiAvail = ""; carParkSpaces = ""
+                                addressLines.clear(); postCode = ""
+                                inTicketOfficeOpen = false; inWaitingRoomOpen = false
+                            }
+                            tag == "Open" && parent == "TicketOffice" -> {
+                                inTicketOfficeOpen = true
+                                ticketOfficeAvail = "Open"
+                            }
+                            tag == "Open" && parent == "WaitingRoom" -> {
+                                inWaitingRoomOpen = true
+                                waitingRoom = "Yes"
+                            }
                         }
                     }
                     XmlPullParser.TEXT -> {
@@ -396,44 +405,44 @@ class KnowledgebaseService {
                         val tag = tagStack.lastOrNull() ?: ""
                         val parent = tagStack.dropLast(1).lastOrNull() ?: ""
                         val grandparent = tagStack.dropLast(2).lastOrNull() ?: ""
-                        val great = tagStack.dropLast(3).lastOrNull() ?: ""
                         when {
-                            tag == "CrsCode" && parent == "Station"        -> crs = text.uppercase()
-                            tag == "Name" && parent == "Station"           -> name = text
-                            tag == "Line"                                   -> addressLines.add(text)
-                            tag == "PostCode"                               -> postCode = text
-                            tag == "PrimaryTelephoneNumber" && great == "Station" ->
+                            tag == "CrsCode" && parent == "StationV4.0"               -> crs = text.uppercase()
+                            tag == "Name" && parent == "StationV4.0"                  -> name = text
+                            tag == "Line" && text != "-"                              -> addressLines.add(text)
+                            tag == "PostCode"                                         -> postCode = text
+                            tag == "TelNationalNumber"                                ->
                                 if (telephone.isEmpty()) telephone = text
-                            tag == "StaffingLevel"                         -> staffingLevel = text
+                            tag == "StaffingLevel"                                    -> staffingLevel = text
                             tag == "Available" && parent == "ClosedCircuitTelevision" ->
                                 cctv = if (text == "true") "Yes" else ""
-                            tag == "Available" && parent == "TicketOffice" ->
-                                ticketOfficeAvail = if (text == "true") "Open" else "Closed"
                             tag == "Available" && parent == "TicketMachine" && grandparent == "Fares" ->
                                 ticketMachineAvail = if (text == "true") "Available" else ""
-                            tag == "Available" && parent == "WaitingRoom"  ->
-                                waitingRoom = if (text == "true") "Yes" else ""
-                            tag == "Available" && parent == "Toilets"      ->
+                            tag == "Available" && parent == "TicketMachine"           ->
+                                ticketMachineAvail = if (text == "true") "Available" else ""
+                            tag == "Available" && parent == "Toilets"                 ->
                                 toilets = if (text == "true") "Yes" else ""
-                            tag == "Available" && parent == "WiFi"         ->
+                            tag == "Available" && parent == "WiFi"                    ->
                                 wifi = if (text == "true") "Yes" else ""
-                            tag == "Coverage"                              -> stepFreeAccess = when (text) {
+                            tag == "Coverage" -> stepFreeAccess = when (text) {
                                 "wholeStation"   -> "Whole station"
                                 "partialStation" -> "Partial"
                                 "none"           -> ""
                                 else             -> text
                             }
-                            tag == "Available" && parent == "Accessibility" ->
+                            tag == "Available" && parent == "StaffHelpAvailable"      ->
                                 assistanceAvail = if (text == "true") "Available" else ""
-                            tag == "Available" && parent == "AccessibleTaxis" ->
-                                taxiAvail = if (text == "true") "Available" else ""
-                            tag == "NumberAccessibleSpaces"                ->
+                            tag == "Available" && parent == "Helpline"                ->
+                                if (assistanceAvail.isEmpty())
+                                    assistanceAvail = if (text == "true") "Available" else ""
+                            tag == "NumberAccessibleSpaces"                           ->
                                 if (text.toIntOrNull() ?: 0 > 0) carParkSpaces = "$text accessible spaces"
                         }
                     }
                     XmlPullParser.END_TAG -> {
-                        val tag = parser.name ?: ""
-                        if (tag == "Station" && inStation) {
+                        val tag = (parser.name ?: "").substringAfterLast(':')
+                        if (tag == "Open" && inTicketOfficeOpen) inTicketOfficeOpen = false
+                        if (tag == "Open" && inWaitingRoomOpen) inWaitingRoomOpen = false
+                        if ((parser.name ?: "") == "StationV4.0" && inStation) {
                             if (crs.length == 3) {
                                 val address = (addressLines + listOf(postCode))
                                     .filter { it.isNotEmpty() }.joinToString(", ")
@@ -458,7 +467,7 @@ class KnowledgebaseService {
                             }
                             inStation = false
                         }
-                        tagStack.removeLastOrNull()
+                        if (tagStack.isNotEmpty()) tagStack.removeLastOrNull()
                     }
                 }
                 eventType = parser.next()
@@ -492,9 +501,11 @@ class KnowledgebaseService {
                     XmlPullParser.START_TAG -> {
                         currentTag = parser.name ?: ""
                         when (currentTag) {
-                            "TrainOperatingCompany" -> { insideToc = true; code = ""; name = ""; website = ""
+                            "TrainOperatingCompany" -> {
+                                insideToc = true; code = ""; name = ""; website = ""
                                 customerServicePhone = ""; assistedTravelPhone = ""
-                                assistedTravelUrl = ""; lostPropertyUrl = "" }
+                                assistedTravelUrl = ""; lostPropertyUrl = ""
+                            }
                             "CustomerService" -> insideCustomerService = true
                             "AssistedTravel"  -> insideAssistedTravel = true
                             "LostProperty"    -> insideLostProperty = true
@@ -505,17 +516,17 @@ class KnowledgebaseService {
                         val text = parser.text?.trim() ?: ""
                         if (text.isEmpty()) { eventType = parser.next(); continue }
                         when {
-                            currentTag == "AtocCode"                                                -> code = text
-                            currentTag == "Name"                                                    -> name = text
-                            currentTag == "CompanyWebsite"                                          -> website = text
-                            currentTag == "com:PrimaryTelephoneNumber" && insideCustomerService     -> customerServicePhone = text
-                            currentTag == "com:TelNationalNumber"      && insideCustomerService
-                                    && customerServicePhone.isEmpty()                               -> customerServicePhone = text
-                            currentTag == "com:PrimaryTelephoneNumber" && insideAssistedTravel      -> assistedTravelPhone = text
-                            currentTag == "com:TelNationalNumber"      && insideAssistedTravel
-                                    && assistedTravelPhone.isEmpty()                                -> assistedTravelPhone = text
-                            currentTag == "com:Url"                    && insideAssistedTravel      -> assistedTravelUrl = text
-                            currentTag == "com:Url"                    && insideLostProperty        -> lostPropertyUrl = text
+                            currentTag == "AtocCode"                                            -> code = text
+                            currentTag == "Name"                                                -> name = text
+                            currentTag == "CompanyWebsite"                                      -> website = text
+                            currentTag == "com:PrimaryTelephoneNumber" && insideCustomerService -> customerServicePhone = text
+                            currentTag == "com:TelNationalNumber" && insideCustomerService
+                                    && customerServicePhone.isEmpty()                           -> customerServicePhone = text
+                            currentTag == "com:PrimaryTelephoneNumber" && insideAssistedTravel  -> assistedTravelPhone = text
+                            currentTag == "com:TelNationalNumber" && insideAssistedTravel
+                                    && assistedTravelPhone.isEmpty()                            -> assistedTravelPhone = text
+                            currentTag == "com:Url" && insideAssistedTravel                     -> assistedTravelUrl = text
+                            currentTag == "com:Url" && insideLostProperty                       -> lostPropertyUrl = text
                         }
                     }
                     XmlPullParser.END_TAG -> {
@@ -578,29 +589,22 @@ data class KbNsiEntry(
 ) {
     val statusLevel: Int get() = status.toIntOrNull() ?: 1
     val isGood:      Boolean get() = statusLevel == 1
-    val isAdvisory:  Boolean get() = statusLevel == 2
     val isDisrupted: Boolean get() = statusLevel == 3
     val isSevere:    Boolean get() = statusLevel == 4
-
-    // Keep legacy aliases so existing call-sites don't break
-    val isMinor: Boolean get() = isAdvisory
-    val isMajor: Boolean get() = isDisrupted
-
-    /** The first disruption URL, for backwards-compatibility with single-URL consumers. */
-    val customUrl: String get() = disruptions.firstOrNull()?.url ?: ""
+    val isMajor:     Boolean get() = isDisrupted
 
     val statusLabel: String get() = when (statusLevel) {
-        1 -> "Good service"
-        2 -> "Advisory"
-        3 -> "Disruption"
-        4 -> "Severe disruption"
+        1    -> "Good service"
+        2    -> "Advisory"
+        3    -> "Disruption"
+        4    -> "Severe disruption"
         else -> "Unknown"
     }
     val statusEmoji: String get() = when (statusLevel) {
-        1 -> "✓"
-        2 -> "⚠"
-        3 -> "🚨"
-        4 -> "🚫"
+        1    -> "✓"
+        2    -> "⚠"
+        3    -> "🚨"
+        4    -> "🚫"
         else -> ""
     }
 }

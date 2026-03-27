@@ -10,7 +10,6 @@ import org.objectweb.asm.Opcodes
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
 }
 
 abstract class StripKafkaJmxTransform
@@ -43,17 +42,19 @@ abstract class StripKafkaJmxTransform
         classData.className == "org.apache.kafka.common.utils.AppInfoParser"
 }
 
-
 android {
     namespace   = "com.traintracker"
-    compileSdk  = 35
+    compileSdk  = 36
 
     defaultConfig {
         applicationId = "com.traintracker"
         minSdk        = 26
-        targetSdk     = 35
+        targetSdk     = 36
         versionCode   = 3
         versionName   = "3.0"
+
+        // Keep only English resources to save space
+        androidResources.localeFilters.add("en")
     }
 
     buildTypes {
@@ -66,13 +67,8 @@ android {
             )
         }
         debug {
-            // Minification disabled for faster debug builds
             isMinifyEnabled = false
             isShrinkResources = false
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
         }
     }
 
@@ -80,7 +76,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
 
     buildFeatures {
         viewBinding = true
@@ -97,6 +92,12 @@ android {
                 "**/Metadata.kotlin_module"
             )
         }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 
@@ -131,7 +132,9 @@ dependencies {
     }
     implementation(libs.slf4j.nop)
     implementation(libs.androidx.work.runtime.ktx)
-    implementation(files("libs/android-stubs.jar"))
+
+    // Use compileOnly for stubs to prevent them from being bundled in the APK
+    compileOnly(files("libs/android-stubs.jar"))
 }
 
 tasks.register("testClasses") {

@@ -1,18 +1,18 @@
 [versions]
-agp = "8.5.0"
-kotlin = "1.9.24"
-coreKtx = "1.13.1"
-appcompat = "1.7.0"
-material = "1.12.0"
-constraintlayout = "2.1.4"
-okhttp = "4.12.0"
-coroutines = "1.8.1"
-lifecycle = "2.8.2"
-recyclerview = "1.3.2"
-swiperefreshlayout = "1.1.0"
-activity = "1.9.0"
-kafka = "3.7.0"
-work = "2.9.1"
+agp = "9.1.0"
+kotlin = "2.3.20"
+coreKtx = "1.18.0"
+appcompat = "1.7.1"
+material = "1.13.0"
+constraintlayout = "2.2.1"
+okhttp = "5.3.2"
+coroutines = "1.10.2"
+lifecycle = "2.10.0"
+recyclerview = "1.4.0"
+swiperefreshlayout = "1.2.0"
+activity = "1.13.0"
+kafka = "4.2.0"
+work = "2.11.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -27,7 +27,7 @@ androidx-lifecycle-viewmodel-ktx = { group = "androidx.lifecycle", name = "lifec
 androidx-lifecycle-livedata-ktx = { group = "androidx.lifecycle", name = "lifecycle-livedata-ktx", version.ref = "lifecycle" }
 androidx-activity-ktx = { group = "androidx.activity", name = "activity-ktx", version.ref = "activity" }
 kafka-clients = { group = "org.apache.kafka", name = "kafka-clients", version.ref = "kafka" }
-slf4j-nop = { group = "org.slf4j", name = "slf4j-nop", version = "2.0.13" }
+slf4j-nop = { group = "org.slf4j", name = "slf4j-nop", version = "2.0.17" }
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
 
 [plugins]
