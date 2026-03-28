@@ -26,7 +26,6 @@ object CorpusData {
 
     @Volatile private var tiplocToCrs: Map<String, String> = emptyMap()
     @Volatile private var tiplocToName: Map<String, String> = emptyMap()
-    @Volatile private var stanoxToCrs: Map<String, String> = emptyMap()
     @Volatile private var crsToTiplocs: Map<String, List<String>> = emptyMap()  // reverse: CRS → [TIPLOCs]
     @Volatile private var loaded = false
     val isReady: Boolean get() = loaded
@@ -34,7 +33,6 @@ object CorpusData {
     // --- Public API -------------------------------------------------------
 
     fun crsFromTiploc(tiploc: String): String? = tiplocToCrs[tiploc.uppercase()]
-    fun crsFromStanox(stanox: String): String? = stanoxToCrs[stanox]
 
     /**
      * Returns all TIPLOCs that map to [crs] — used to widen DB queries so services
@@ -70,7 +68,6 @@ object CorpusData {
 
     private fun loadFromJson(json: String) {
         val tiploc = HashMap<String, String>(6000)
-        val stanox  = HashMap<String, String>(6000)
 
         val name   = HashMap<String, String>(6000)
 
@@ -79,12 +76,10 @@ object CorpusData {
             val obj        = arr.getJSONObject(i)
             val tiplocCode = obj.optString("TIPLOC").trim().uppercase()
             val crs        = obj.optString("3ALPHA").trim().uppercase()
-            val stanoxCode = obj.optString("STANOX").trim()
             val desc       = obj.optString("NLCDESC").trim()
             if (tiplocCode.isNotEmpty()) {
                 if (crs.length == 3) {
                     tiploc[tiplocCode] = crs
-                    if (stanoxCode.isNotEmpty()) stanox[stanoxCode] = crs
                 }
                 // Store NLCDESC as fallback display name for TIPLOCs with no CRS
                 if (desc.isNotEmpty() && desc != " ") {
@@ -100,7 +95,6 @@ object CorpusData {
         tiploc.putAll(BUILT_IN_TIPLOC)
 
         tiplocToCrs  = tiploc
-        stanoxToCrs  = stanox
         tiplocToName = name
 
         // Build reverse map: CRS → list of all TIPLOCs that map to it
@@ -155,7 +149,19 @@ object CorpusData {
         "CANNST"   to "CST", "MARGXR"   to "MYB",
         "MRDNBCRT" to "MYB", "CLPHMJC"  to "CLJ",
         "CLPHMJM"  to "CLJ", "CLPHMJW"  to "CLJ",
-        "LNDNBDGE" to "LBG", "BLFRSGT"  to "BAL",
+        "LNDNBDGE" to "LBG",   // London Bridge (built-in fallback)
+        "LNDNBDG"  to "LBG",   // London Bridge (main)
+        "LNDNBDC"  to "LBG",   // London Bridge Central (platforms 14-16, Thameslink)
+        "LNDNBDE"  to "LBG",   // London Bridge Eastern (Southeastern platforms)
+        "LNDNB9"   to "LBG",   // London Bridge platform 9
+        "LNDNB10"  to "LBG",   // London Bridge platform 10
+        "LNDNB11"  to "LBG",   // London Bridge platform 11
+        "LNDNB12"  to "LBG",   // London Bridge platform 12
+        "LNDNB13"  to "LBG",   // London Bridge platform 13
+        "LNDNB14"  to "LBG",   // London Bridge platform 14
+        "LNDNB15"  to "LBG",   // London Bridge platform 15
+        "LNDNB16"  to "LBG",   // London Bridge platform 16
+        "BLFRSGT"  to "BAL",
         "LVRPLST"  to "LST",   // Liverpool Street main — in CORPUS but add as fallback
         "LIVSTXR"  to "LST",   // Liverpool Street Elizabeth line / Crossrail
         "CRYDNRJ"  to "ECR",

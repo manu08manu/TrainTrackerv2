@@ -1,11 +1,6 @@
 package com.traintracker
 
-data class TocInfo(
-    val code: String,
-    val name: String,
-    val brandColorHex: String,
-    val logoRes: Int = 0   // drawable resource id, set at runtime
-)
+import androidx.core.graphics.toColorInt
 
 object TocData {
 
@@ -24,19 +19,19 @@ object TocData {
         TocEntry("CH",  "Chiltern Railways",      "#00447C", "logo_ch"),
         TocEntry("CS",  "Caledonian Sleeper",     "#1C4EA0", "logo_cs"),
         TocEntry("EM",  "East Midlands Railway",  "#732982", "logo_em"),
-        TocEntry("ES",  "Eurostar",               "#FFD700", "logo_es"),
-        TocEntry("GC",  "Grand Central",          "#F4A01B", "logo_gc"),
+        TocEntry("ES",  "Eurostar",               "#0F6CFD", "logo_es"),
+        TocEntry("GC",  "Grand Central",          "#F58220", "logo_gc"),
         TocEntry("GN",  "Great Northern",         "#003DA5", "logo_gn"),
         TocEntry("GR",  "LNER",                   "#E21836", "logo_gr"),
-        TocEntry("GW",  "Great Western Railway",  "#0A4F5E", "logo_gw"),
+        TocEntry("GW",  "Great Western Railway",  "#007A53", "logo_gw"),
         TocEntry("GX",  "Gatwick Express",        "#E21836", "logo_gx"),
         TocEntry("HT",  "Hull Trains",            "#EB2226", "logo_ht"),
         TocEntry("HX",  "Heathrow Express",       "#532B6F", "logo_hx"),
         TocEntry("IL",  "Island Line",            "#006CB7", "logo_il"),
         TocEntry("LE",  "Greater Anglia",         "#D10A11", "logo_le"),
         TocEntry("LM",  "West Midlands Trains",   "#FF6600", "logo_lm"),
-        TocEntry("LD",  "Lumo",                   "#E84E10", "logo_ld"),
-        TocEntry("LF",  "Lumo",                   "#E84E10", "logo_ld"),
+        TocEntry("LD",  "Lumo",                   "#1568BF", "logo_ld"),
+        TocEntry("LF",  "Lumo",                   "#1568BF", "logo_ld"),
         TocEntry("LO",  "London Overground",      "#EE7C0E", "logo_lo"),
         TocEntry("ME",  "Merseyrail",             "#FFE600", "logo_me"),
         TocEntry("NT",  "Northern Trains",        "#A71F25", "logo_nt"),
@@ -100,7 +95,7 @@ object TocData {
 
     fun brandColor(operatorCode: String): Int {
         val hex = get(operatorCode)?.brandColorHex ?: "#555555"
-        return try { android.graphics.Color.parseColor(hex) } catch (e: Exception) { 0xFF555555.toInt() }
+        return try { hex.toColorInt() } catch (_: Exception) { 0xFF555555.toInt() }
     }
 
     /**
@@ -113,8 +108,8 @@ object TocData {
         val upper = name.uppercase()
         return BY_CODE.values.firstOrNull {
             it.name.uppercase() == upper ||
-            upper.contains(it.name.uppercase()) ||
-            it.name.uppercase().contains(upper)
+                    upper.contains(it.name.uppercase()) ||
+                    it.name.uppercase().contains(upper)
         }?.code ?: ""
     }
 }
