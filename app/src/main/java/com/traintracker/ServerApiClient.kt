@@ -178,11 +178,27 @@ class ServerApiClient {
             }
         }
 
+
     /**
-     * Fetches all schedule instances of [headcode] across every station — no CRS required.
-     * Returns the full list as [ServerService] objects (same shape as departures board).
-     * Returns null if the server returns 404 (headcode not found in CIF).
+     * Fetches all services for a given unit number today.
+     * Returns null if the server returns 404 (unit not found).
      */
+    suspend fun getUnitBoard(unit: String): List<ServerService>? =
+        withContext(Dispatchers.IO) {
+            try {
+                val response = http.newCall(
+                    Request.Builder().url("$baseUrl/api/unit/${unit.uppercase().trim()}").build()
+                ).execute()
+                when {
+                    response.code == 404 -> null
+                    !response.isSuccessful -> { Log.w(TAG, "getUnitBoard HTTP ${response.code}"); emptyList() }
+                    else -> parseServices(JSONObject(response.body.string()).optJSONArray("services"))
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "getUnitBoard error: ${e.message}"); emptyList()
+            }
+        }
+
     suspend fun getHeadcodeBoard(headcode: String): List<ServerService>? =
         withContext(Dispatchers.IO) {
             try {
@@ -190,7 +206,7 @@ class ServerApiClient {
                     Request.Builder().url("$baseUrl/api/headcode/${headcode.uppercase().trim()}").build()
                 ).execute()
                 when {
-                    response.code == 404 -> null   // headcode genuinely not in CIF
+                    response.code == 404 -> null
                     !response.isSuccessful -> { Log.w(TAG, "getHeadcodeBoard HTTP ${response.code}"); emptyList() }
                     else -> parseServices(JSONObject(response.body.string()).optJSONArray("services"))
                 }
@@ -394,21 +410,30 @@ class ServerApiClient {
         val result = mutableListOf<ServerService>()
         for (i in 0 until array.length()) {
             val s = array.getJSONObject(i)
+            val units = s.optJSONArray("units")?.let { arr ->
+                (0 until arr.length()).map { arr.getString(it) }
+            } ?: emptyList()
+            val vehicles = s.optJSONArray("vehicles")?.let { arr ->
+                (0 until arr.length()).map { arr.getString(it) }
+            } ?: emptyList()
             result.add(ServerService(
-                uid           = s.optString("uid"),
-                headcode      = s.optString("headcode"),
-                atocCode      = s.optString("atocCode"),
-                scheduledTime = s.optString("scheduledTime"),
-                platform      = s.safeString("platform").ifEmpty { null },
-                isPass        = s.optBoolean("isPass", false),
-                originCrs     = s.safeString("originCrs").ifEmpty { null },
-                destCrs       = s.safeString("destCrs").ifEmpty { null },
-                originTiploc  = s.optString("originTiploc"),
-                destTiploc    = s.optString("destTiploc"),
-                actualTime    = s.safeString("actualTime"),
-                isCancelled   = s.optBoolean("isCancelled", false),
-                cancelReason  = s.safeString("cancelReason"),
-                hasAlert      = s.optBoolean("isCancelled", false)
+                uid            = s.optString("uid"),
+                headcode       = s.optString("headcode"),
+                atocCode       = s.optString("atocCode"),
+                scheduledTime  = s.optString("scheduledTime"),
+                platform       = s.safeString("platform").ifEmpty { null },
+                isPass         = s.optBoolean("isPass", false),
+                originCrs      = s.safeString("originCrs").ifEmpty { null },
+                destCrs        = s.safeString("destCrs").ifEmpty { null },
+                originTiploc   = s.optString("originTiploc"),
+                destTiploc     = s.optString("destTiploc"),
+                actualTime     = s.safeString("actualTime"),
+                isCancelled    = s.optBoolean("isCancelled", false),
+                cancelReason   = s.safeString("cancelReason"),
+                hasAlert       = s.optBoolean("isCancelled", false),
+                units          = units,
+                vehicles       = vehicles,
+                unitJoinTiploc = s.safeString("unitJoinTiploc").ifEmpty { null }
             ))
         }
         return result
@@ -478,7 +503,10 @@ data class ServerService(
     val actualTime: String = "",
     val isCancelled: Boolean = false,
     val cancelReason: String = "",
-    val hasAlert: Boolean = false
+    val hasAlert: Boolean = false,
+    val units: List<String> = emptyList(),
+    val vehicles: List<String> = emptyList(),
+    val unitJoinTiploc: String? = null
 )
 
 data class CallingPointsResult(

@@ -79,6 +79,7 @@ class MainActivity : AppCompatActivity() {
         setupFilterChips()
         setupFavouriteChips()
         observeUiState()
+        observeUnitBoard()
         observeFilterState()
         observeDarwinState()
         observeIncidents()
@@ -210,10 +211,7 @@ class MainActivity : AppCompatActivity() {
     // ─── Filter chips ─────────────────────────────────────────────────────────
     private fun setupFilterChips() {
         binding.chipCallingAt.setOnClickListener { showCallingAtDialog() }
-        binding.chipCallingAt.setOnCloseIconClickListener {
-            viewModel.clearHeadcodeBoard()
-            viewModel.clearCallingAtFilter()
-        }
+        binding.chipCallingAt.setOnCloseIconClickListener { viewModel.clearCallingAtFilter() }
 
         binding.chipOperator.setOnClickListener { showOperatorDialog() }
         binding.chipOperator.setOnCloseIconClickListener { viewModel.clearOperatorFilter() }
@@ -373,6 +371,13 @@ class MainActivity : AppCompatActivity() {
             searchByHeadcode(text.uppercase())
             return
         }
+        // Unit number: all digits (e.g. 375918) OR 2 letters + digits (e.g. HA14, NL13)
+        // but NOT a headcode (1 digit + 3 alphanumeric)
+        if (text.matches(Regex("[0-9]{4,}", RegexOption.IGNORE_CASE)) ||
+            text.matches(Regex("[A-Z]{2}[0-9]+", RegexOption.IGNORE_CASE))) {
+            searchByUnit(text.uppercase())
+            return
+        }
         if (text.length <= 5) {
             StationData.findByCrs(text.take(3))?.let { selectStation(it); return }
         }
@@ -385,23 +390,61 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun searchByHeadcode(headcode: String) {
-        // Always do a fresh station-independent search via /api/headcode/{headcode}.
-        // We don't filter the current board — we replace it entirely with the headcode results.
-        currentCrs = ""
-        binding.etCrs.setText(headcode.uppercase())
+        if (currentCrs.isNotEmpty()) {
+            // Station already selected — filter the current board directly
+            viewModel.setHeadcodeFilter(headcode)
+            binding.chipCallingAt.text = getString(R.string.filter_headcode, headcode)
+            binding.chipCallingAt.isChecked = true
+            return
+        }
+        // No station selected — try to locate the train globally via the server
         binding.progressBar.visibility = View.VISIBLE
-        viewModel.fetchHeadcodeBoard(
+        viewModel.locateHeadcodeGlobally(
             headcode = headcode,
+            onFound = { crs ->
+                binding.progressBar.visibility = View.GONE
+                val station = StationData.findByCrs(crs)
+                if (station != null) {
+                    selectStation(station)
+                } else {
+                    currentCrs = crs
+                    binding.etCrs.setText(crs)
+                    updateFavouriteButton()
+                    saveAndSearch()
+                }
+                viewModel.setHeadcodeFilter(headcode)
+                binding.chipCallingAt.text = getString(R.string.filter_headcode, headcode)
+                binding.chipCallingAt.isChecked = true
+            },
             onNotFound = {
                 binding.progressBar.visibility = View.GONE
                 AlertDialog.Builder(this)
                     .setTitle("Headcode not found")
-                    .setMessage("$headcode wasn't found in today's schedule. It may not be running today, or the CIF data may not have it yet.")
+                    .setMessage("$headcode could not be located. It may not be running yet, or the server may not have data for it.\n\nTry selecting a station first to search there.")
                     .setPositiveButton("OK", null)
                     .show()
             }
         )
-        binding.chipCallingAt.text = getString(R.string.filter_headcode, headcode)
+    }
+
+
+    private fun searchByUnit(unit: String) {
+        currentCrs = ""
+        binding.etCrs.setText(unit.uppercase())
+        binding.progressBar.visibility = View.VISIBLE
+        viewModel.clearHeadcodeBoard()
+        viewModel.fetchUnitBoard(
+            unit = unit,
+            onNotFound = {
+                binding.progressBar.visibility = View.GONE
+                AlertDialog.Builder(this)
+                    .setTitle("Unit not found")
+                    .setMessage("$unit wasn't found in today's allocations.")
+                    .setPositiveButton("OK", null)
+                    .show()
+            }
+        )
+        binding.chipCallingAt.text = "Unit $unit"
         binding.chipCallingAt.isChecked = true
     }
 
@@ -412,13 +455,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun saveAndSearch() {
+        viewModel.clearHeadcodeBoard()
+        binding.chipCallingAt.text = getString(R.string.filter_calling_at)
+        binding.chipCallingAt.isChecked = false
+        binding.chipCallingAt.isCloseIconVisible = false
         prefs.edit { putString("last_crs", currentCrs) }
         updateFavouriteButton()
         val name = StationData.findByCrs(currentCrs)?.name ?: currentCrs
         viewModel.recordRecentStation(currentCrs, name)
-        // Clear any active headcode board so the station board shows fresh
-        viewModel.clearHeadcodeBoard()
-        viewModel.clearHeadcodeFilter()
         search()
     }
 
@@ -491,76 +535,103 @@ class MainActivity : AppCompatActivity() {
     private fun observeUiState() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                // Combine both flows so headcodeBoard always takes priority — no race condition
-                kotlinx.coroutines.flow.combine(
-                    viewModel.headcodeBoard,
-                    viewModel.uiState
-                ) { hcState, normalState -> hcState to normalState }
-                    .collect { (hcState, normalState) ->
-                        binding.swipeRefresh.isRefreshing = false
-                        if (hcState != null) {
-                            renderState(hcState, isHeadcodeBoard = true)
-                        } else {
-                            renderState(normalState, isHeadcodeBoard = false)
+                viewModel.uiState.collect { state ->
+                    binding.swipeRefresh.isRefreshing = false
+                    when (state) {
+                        is UiState.Idle -> {
+                            binding.progressBar.visibility = View.GONE
+                            binding.tvError.visibility     = View.GONE
+                            binding.emptyState.visibility  = View.GONE
+                            binding.tvHeader.visibility    = View.GONE
+                        }
+                        is UiState.Loading -> {
+                            binding.progressBar.visibility = View.VISIBLE
+                            binding.tvError.visibility     = View.GONE
+                            binding.emptyState.visibility  = View.GONE
+                            binding.tvHeader.visibility    = View.GONE
+                            adapter.submitList(emptyList())
+                        }
+                        is UiState.Success -> {
+                            binding.progressBar.visibility = View.GONE
+                            binding.tvError.visibility     = View.GONE
+                            binding.tvHeader.visibility    = View.VISIBLE
+                            // generatedAt holds the date string for historic boards
+                            val genTime = state.board.generatedAt.take(16).replace('T', ' ')
+                            binding.tvHeader.text = getString(
+                                R.string.board_header,
+                                state.board.boardType.label,
+                                state.board.stationName,
+                                genTime
+                            )
+                            if (state.board.services.isEmpty()) {
+                                binding.emptyState.visibility = View.VISIBLE
+                                binding.tvEmptySubtitle.text = when {
+                                    viewModel.historicDate.value != null ->
+                                        "No services were recorded for this station on that date."
+                                    viewModel.filterCallingAt.value.isNotEmpty() ||
+                                            viewModel.filterOperator.value.isNotEmpty() ->
+                                        "No services match your current filters.\nTry clearing a filter to see more results."
+                                    else ->
+                                        "There are no trains scheduled in this window.\nTry adjusting the time or checking for disruptions."
+                                }
+                                adapter.submitList(emptyList())
+                            } else {
+                                binding.emptyState.visibility = View.GONE
+                                adapter.submitAll(state.board.services, state.board.stationName)
+                            }
+                            showNrccMessages(state.board.nrccMessages)
+                        }
+                        is UiState.Error -> {
+                            binding.progressBar.visibility = View.GONE
+                            binding.emptyState.visibility  = View.GONE
+                            binding.tvError.text = getString(R.string.error_prefix, state.message)
+                            binding.tvError.visibility  = View.VISIBLE
+                            binding.tvHeader.visibility = View.GONE
+                            adapter.submitList(emptyList())
                         }
                     }
+                }
             }
         }
     }
 
-    private fun renderState(state: UiState, isHeadcodeBoard: Boolean) {
-        when (state) {
-            is UiState.Idle -> {
-                binding.progressBar.visibility = View.GONE
-                binding.tvError.visibility     = View.GONE
-                binding.emptyState.visibility  = View.GONE
-                binding.tvHeader.visibility    = View.GONE
-            }
-            is UiState.Loading -> {
-                binding.progressBar.visibility = View.VISIBLE
-                binding.tvError.visibility     = View.GONE
-                binding.emptyState.visibility  = View.GONE
-                binding.tvHeader.visibility    = View.GONE
-                adapter.submitList(emptyList())
-            }
-            is UiState.Success -> {
-                binding.progressBar.visibility = View.GONE
-                binding.tvError.visibility     = View.GONE
-                binding.tvHeader.visibility    = View.VISIBLE
-                val genTime = state.board.generatedAt.take(16).replace('T', ' ')
-                binding.tvHeader.text = getString(
-                    R.string.board_header,
-                    state.board.boardType.label,
-                    state.board.stationName,
-                    genTime
-                )
-                if (state.board.services.isEmpty()) {
-                    binding.emptyState.visibility = View.VISIBLE
-                    binding.tvEmptySubtitle.text = when {
-                        isHeadcodeBoard ->
-                            "No schedule found for this headcode. It may not be running today."
-                        viewModel.historicDate.value != null ->
-                            "No services were recorded for this station on that date."
-                        viewModel.filterCallingAt.value.isNotEmpty() ||
-                                viewModel.filterOperator.value.isNotEmpty() ->
-                            "No services match your current filters.\nTry clearing a filter to see more results."
-                        else ->
-                            "There are no trains scheduled in this window.\nTry adjusting the time or checking for disruptions."
+
+    private fun observeUnitBoard() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.unitBoard.collect { state ->
+                    if (state == null) return@collect
+                    binding.swipeRefresh.isRefreshing = false
+                    when (state) {
+                        is UiState.Loading -> {
+                            binding.progressBar.visibility = View.VISIBLE
+                            binding.tvError.visibility     = View.GONE
+                            binding.emptyState.visibility  = View.GONE
+                            binding.tvHeader.visibility    = View.GONE
+                            adapter.submitList(emptyList())
+                        }
+                        is UiState.Success -> {
+                            binding.progressBar.visibility = View.GONE
+                            binding.tvError.visibility     = View.GONE
+                            binding.tvHeader.visibility    = View.VISIBLE
+                            binding.tvHeader.text = "Unit ${state.board.stationName}"
+                            if (state.board.services.isEmpty()) {
+                                binding.emptyState.visibility = View.VISIBLE
+                                binding.tvEmptySubtitle.text = "No services found for this unit today."
+                                adapter.submitList(emptyList())
+                            } else {
+                                binding.emptyState.visibility = View.GONE
+                                adapter.submitAll(state.board.services, state.board.stationName)
+                            }
+                        }
+                        is UiState.Error -> {
+                            binding.progressBar.visibility = View.GONE
+                            binding.tvError.text = state.message
+                            binding.tvError.visibility = View.VISIBLE
+                        }
+                        else -> {}
                     }
-                    adapter.submitList(emptyList())
-                } else {
-                    binding.emptyState.visibility = View.GONE
-                    adapter.submitAll(state.board.services, state.board.stationName)
                 }
-                if (!isHeadcodeBoard) showNrccMessages(state.board.nrccMessages)
-            }
-            is UiState.Error -> {
-                binding.progressBar.visibility = View.GONE
-                binding.emptyState.visibility  = View.GONE
-                binding.tvError.text = getString(R.string.error_prefix, state.message)
-                binding.tvError.visibility  = View.VISIBLE
-                binding.tvHeader.visibility = View.GONE
-                adapter.submitList(emptyList())
             }
         }
     }
@@ -571,29 +642,11 @@ class MainActivity : AppCompatActivity() {
                 launch {
                     viewModel.filterCallingAt.collect { crs ->
                         if (crs.isEmpty()) {
-                            // Only reset chip to default if there's no active headcode board
-                            if (viewModel.headcodeBoard.value == null) {
-                                binding.chipCallingAt.text = getString(R.string.filter_calling_at)
-                                binding.chipCallingAt.isCloseIconVisible = false
-                                binding.chipCallingAt.isChecked = false
-                            }
+                            binding.chipCallingAt.text = getString(R.string.filter_calling_at)
+                            binding.chipCallingAt.isCloseIconVisible = false
                         } else {
                             val name = StationData.findByCrs(crs)?.name ?: crs
                             binding.chipCallingAt.text = getString(R.string.filter_calling_at_active, name)
-                            binding.chipCallingAt.isCloseIconVisible = true
-                        }
-                    }
-                }
-                launch {
-                    viewModel.headcodeBoard.collect { hcState ->
-                        if (hcState == null) {
-                            // Headcode board was cleared — reset chip unless calling-at filter is active
-                            if (viewModel.filterCallingAt.value.isEmpty()) {
-                                binding.chipCallingAt.text = getString(R.string.filter_calling_at)
-                                binding.chipCallingAt.isCloseIconVisible = false
-                                binding.chipCallingAt.isChecked = false
-                            }
-                        } else {
                             binding.chipCallingAt.isCloseIconVisible = true
                         }
                     }

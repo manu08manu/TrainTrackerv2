@@ -80,11 +80,6 @@ class MainViewModel : ViewModel() {
     private val _headcodeFilter     = MutableStateFlow("")
     val headcodeFilter: StateFlow<String> = _headcodeFilter.asStateFlow()
 
-    // Non-null while a headcode global search result is being shown.
-    // Set back to null when the user clears the search or selects a station.
-    private val _headcodeBoard = MutableStateFlow<UiState?>(null)
-    val headcodeBoard: StateFlow<UiState?> = _headcodeBoard.asStateFlow()
-
     private val _trustConnected = MutableStateFlow(false)
     val trustConnected: StateFlow<Boolean> = _trustConnected.asStateFlow()
 
@@ -446,44 +441,6 @@ class MainViewModel : ViewModel() {
         }
     }
 
-    /**
-     * Performs a fresh global headcode search: calls /api/headcode/{headcode} and
-     * publishes the result to [headcodeBoard]. The existing station board is left
-     * untouched — MainActivity switches which state to observe.
-     *
-     * [onNotFound] is called (on the main thread) if the server returns 404.
-     */
-    fun fetchHeadcodeBoard(headcode: String, onNotFound: () -> Unit) {
-        if (!server.isEnabled) { onNotFound(); return }
-        autoRefreshJob?.cancel()
-        val hc = headcode.uppercase().trim()
-        _headcodeBoard.value = UiState.Loading
-        viewModelScope.launch {
-            val services = try { server.getHeadcodeBoard(hc) } catch (_: Exception) { emptyList() }
-            if (services == null) {
-                _headcodeBoard.value = null
-                onNotFound()
-                return@launch
-            }
-            val trainServices = services.map { s -> serverServiceToTrain(s, BoardType.DEPARTURES, null) }
-            _headcodeBoard.value = UiState.Success(
-                BoardResult(
-                    stationName     = "Headcode $hc",
-                    crs             = hc,
-                    services        = trainServices,
-                    generatedAt     = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.UK)
-                        .format(java.util.Date()),
-                    boardType       = BoardType.DEPARTURES,
-                    filterCallingAt = "",
-                    timeOffset      = 0
-                )
-            )
-        }
-    }
-
-    /** Clears the headcode board result so the normal station board shows again. */
-    fun clearHeadcodeBoard() { _headcodeBoard.value = null }
-
     private fun startAutoRefresh() {
         autoRefreshJob?.cancel()
         autoRefreshJob = viewModelScope.launch {
@@ -591,7 +548,7 @@ class MainViewModel : ViewModel() {
                     val prev    = if (atIndex > 0) callingPoints.subList(0, atIndex) else emptyList()
                     val subseq  = if (atIndex >= 0 && atIndex < callingPoints.size - 1)
                         callingPoints.subList(atIndex + 1, callingPoints.size)
-                    else emptyList()
+                    else callingPoints
                     _detailState.value = DetailState.Success(
                         fallback.copy(
                             previousCallingPoints   = prev.ifEmpty { fallback.previousCallingPoints },
@@ -861,5 +818,77 @@ class MainViewModel : ViewModel() {
                 .sortedBy { midnightAwareSortKey(it.scheduledTime) }
         }
         _uiState.value = current.copy(board = applyFilters(current.board.copy(services = services)))
+    }
+    // ── Unit board ────────────────────────────────────────────────────────────
+
+    private val _unitBoard = MutableStateFlow<UiState?>(null)
+    val unitBoard: StateFlow<UiState?> = _unitBoard.asStateFlow()
+
+    fun clearUnitBoard() { _unitBoard.value = null }
+
+    fun fetchUnitBoard(unit: String, onNotFound: () -> Unit) {
+        if (!server.isEnabled) { onNotFound(); return }
+        autoRefreshJob?.cancel()
+        val u = unit.uppercase().trim()
+        _unitBoard.value = UiState.Loading
+        viewModelScope.launch {
+            val services = try { server.getUnitBoard(u) } catch (_: Exception) { emptyList() }
+            if (services == null) {
+                _unitBoard.value = null
+                onNotFound()
+                return@launch
+            }
+            val trainServices = services.map { s ->
+                serverServiceToTrain(s, BoardType.DEPARTURES, null).copy(
+                    units = s.units
+                )
+            }
+            _unitBoard.value = UiState.Success(
+                BoardResult(
+                    stationName = "Unit $u",
+                    crs         = u,
+                    services    = trainServices,
+                    generatedAt = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.UK)
+                        .format(java.util.Date()),
+                    boardType   = BoardType.DEPARTURES
+                )
+            )
+        }
+    }
+
+    // ── Headcode board ────────────────────────────────────────────────────────
+
+    private val _headcodeBoard = MutableStateFlow<UiState?>(null)
+    val headcodeBoard: StateFlow<UiState?> = _headcodeBoard.asStateFlow()
+
+    fun clearHeadcodeBoard() {
+        _headcodeBoard.value = null
+        _unitBoard.value = null
+    }
+
+    fun fetchHeadcodeBoard(headcode: String, onNotFound: () -> Unit) {
+        if (!server.isEnabled) { onNotFound(); return }
+        autoRefreshJob?.cancel()
+        val h = headcode.uppercase().trim()
+        _headcodeBoard.value = UiState.Loading
+        viewModelScope.launch {
+            val services = try { server.getHeadcodeBoard(h) } catch (_: Exception) { emptyList() }
+            if (services == null || services.isEmpty()) {
+                _headcodeBoard.value = null
+                onNotFound()
+                return@launch
+            }
+            val trainServices = services.map { s -> serverServiceToTrain(s, BoardType.DEPARTURES, null) }
+            _headcodeBoard.value = UiState.Success(
+                BoardResult(
+                    stationName = h,
+                    crs         = h,
+                    services    = trainServices,
+                    generatedAt = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.UK)
+                        .format(java.util.Date()),
+                    boardType   = BoardType.DEPARTURES
+                )
+            )
+        }
     }
 }
