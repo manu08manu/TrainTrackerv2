@@ -89,9 +89,16 @@ object TocData {
         return BY_CODE[key] ?: BY_CODE[ALIASES[key] ?: ""]
     }
 
-    /** Returns the drawable resource name for use with context.resources.getIdentifier() */
+    /** Returns the drawable resource name for use with logoDrawableRes() */
     fun logoDrawableName(operatorCode: String): String =
         get(operatorCode)?.logoDrawableName ?: ""
+
+    /** Resolves a drawable name to a resource ID without using the deprecated getIdentifier(). */
+    fun logoDrawableRes(name: String, ctx: android.content.Context): Int {
+        if (name.isEmpty()) return 0
+        @Suppress("DiscouragedApi")
+        return ctx.resources.getIdentifier(name, "drawable", ctx.packageName)
+    }
 
     fun brandColor(operatorCode: String): Int {
         val hex = get(operatorCode)?.brandColorHex ?: "#555555"

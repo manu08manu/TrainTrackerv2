@@ -7,6 +7,8 @@ import android.os.Bundle
 import android.view.View
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.graphics.toColorInt
+import androidx.core.view.isGone
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -139,7 +141,7 @@ class ServiceDetailActivity : AppCompatActivity() {
         bindUnitInfo(boardUnits, boardCoaches, null)
         viewModel.fetchCifServiceDetails(serviceId, queryCrs, initialDetails)
 
-        binding.tvServiceTitle.text = "${resolveLocationName(origin)} → $dest"
+        binding.tvServiceTitle.text = getString(R.string.service_title_route, resolveLocationName(origin), dest)
         binding.rvCallingPoints.layoutManager = LinearLayoutManager(this)
 
         binding.chipSimple.setOnClickListener {
@@ -257,7 +259,7 @@ class ServiceDetailActivity : AppCompatActivity() {
                         }
                         is DetailState.Error   -> {
                             binding.progressBar.visibility  = View.GONE
-                            binding.tvError.text = "Error: ${state.message}"
+                            binding.tvError.text = getString(R.string.error_prefix, state.message)
                             binding.tvError.visibility      = View.VISIBLE
                             // Keep contentGroup visible with whatever we already have
                         }
@@ -360,18 +362,18 @@ class ServiceDetailActivity : AppCompatActivity() {
         val loc = viewModel.lastKnownLocations.value[hc]
         when {
             live.isCancelled -> {
-                binding.tvLiveLocationText.text = "Service cancelled"
+                binding.tvLiveLocationText.text = getString(R.string.service_cancelled)
                 binding.tvLiveLocationTime.text = ""
                 binding.bannerLiveLocation.visibility = View.VISIBLE
             }
             loc != null -> {
-                val verb = if (loc.eventType == "DEPARTURE") "Departed" else "At"
+                val verb = if (loc.eventType == "DEPARTURE") getString(R.string.verb_departed) else getString(R.string.verb_at)
                 val delayStr = when {
-                    live.latestDelayMins > 0  -> " · +${live.latestDelayMins}m late"
-                    live.latestDelayMins < 0  -> " · ${-live.latestDelayMins}m early"
-                    else                      -> " · On time"
+                    live.latestDelayMins > 0  -> getString(R.string.delay_late, live.latestDelayMins)
+                    live.latestDelayMins < 0  -> getString(R.string.delay_early, -live.latestDelayMins)
+                    else                      -> getString(R.string.delay_on_time)
                 }
-                binding.tvLiveLocationText.text = "$verb ${loc.stationName}$delayStr"
+                binding.tvLiveLocationText.text = getString(R.string.live_location_text, verb, loc.stationName, delayStr)
                 binding.tvLiveLocationTime.text = loc.time
                 binding.bannerLiveLocation.visibility = View.VISIBLE
             }
@@ -394,7 +396,7 @@ class ServiceDetailActivity : AppCompatActivity() {
         val hasCoaches = coachCount in 1..20
 
         if (!hasUnits && !hasCoaches && hspSummary == null) {
-            if (binding.layoutPunctuality.visibility == View.GONE) {
+            if (binding.layoutPunctuality.isGone) {
                 binding.cardUnitHsp.visibility = View.GONE
             }
             return
@@ -414,7 +416,7 @@ class ServiceDetailActivity : AppCompatActivity() {
                 append(units.joinToString(" + "))
                 if (hasCoaches) append("  ·  ${coachCount}c")
             }
-            binding.tvUnitAllocationLabel.text = "Unit allocation"
+            binding.tvUnitAllocationLabel.text = getString(R.string.label_unit_allocation)
             binding.tvUnitAllocationLabel.visibility = View.VISIBLE
             binding.tvUnitAllocation.text = classTractionLine.ifEmpty { unitLine }
             binding.tvUnitAllocation.visibility = View.VISIBLE
@@ -422,9 +424,9 @@ class ServiceDetailActivity : AppCompatActivity() {
             binding.tvUnitNumbers.visibility = if (classTractionLine.isNotEmpty() && unitLine.isNotEmpty()) View.VISIBLE else View.GONE
         } else if (hasCoaches) {
             // No Darwin units yet — just show coach count, no class guessing
-            binding.tvUnitAllocationLabel.text = "Formation"
+            binding.tvUnitAllocationLabel.text = getString(R.string.label_formation)
             binding.tvUnitAllocationLabel.visibility = View.VISIBLE
-            binding.tvUnitAllocation.text = "$coachCount coaches"
+            binding.tvUnitAllocation.text = getString(R.string.coach_count, coachCount)
             binding.tvUnitAllocation.visibility = View.VISIBLE
             binding.tvUnitNumbers.visibility = View.GONE
         } else {
@@ -441,14 +443,14 @@ class ServiceDetailActivity : AppCompatActivity() {
         binding.layoutPunctuality.visibility = View.VISIBLE
 
         val pct = summary.punctualityPct
-        binding.tvPunctualityPct.text = "$pct%"
-        binding.tvPunctualitySample.text = "${summary.totalRuns} runs"
+        binding.tvPunctualityPct.text = getString(R.string.punctuality_pct, pct)
+        binding.tvPunctualitySample.text = getString(R.string.punctuality_runs, summary.totalRuns)
 
         // Colour the badge: green ≥ 85%, amber ≥ 70%, red below
         val colour = when {
-            pct >= 85 -> Color.parseColor("#2E7D32")  // dark green
-            pct >= 70 -> Color.parseColor("#E65100")  // amber/orange
-            else      -> Color.parseColor("#B71C1C")  // red
+            pct >= 85 -> "#2E7D32".toColorInt()  // dark green
+            pct >= 70 -> "#E65100".toColorInt()  // amber/orange
+            else      -> "#B71C1C".toColorInt()  // red
         }
         binding.layoutPunctuality.background.setTint(colour)
     }
@@ -485,7 +487,7 @@ class ServiceDetailActivity : AppCompatActivity() {
                 },
                 platform    = updatedPlatform ?: pt.platform,
                 isCancelled = isCancelledStop || pt.isCancelled || live.isCancelled
-                    || intent.getBooleanExtra(EXTRA_IS_CANCELLED, false)
+                        || intent.getBooleanExtra(EXTRA_IS_CANCELLED, false)
             )
         }
 
@@ -571,7 +573,7 @@ class ServiceDetailActivity : AppCompatActivity() {
 
     private fun bindHeader(d: ServiceDetails, boardUnits: List<String>, boardCoaches: Int) {
         val logoName = TocData.logoDrawableName(d.operatorCode).ifEmpty { TocData.logoDrawableName(d.operator) }
-        val resId    = if (logoName.isNotEmpty()) resources.getIdentifier(logoName, "drawable", packageName) else 0
+        val resId    = TocData.logoDrawableRes(logoName, this)
         if (resId != 0) {
             binding.imgTocLogo.setImageResource(resId)
             binding.imgTocLogo.visibility = View.VISIBLE

@@ -2,6 +2,7 @@ package com.traintracker
 
 import androidx.lifecycle.ViewModel
 import android.util.Log
+import androidx.collection.LruCache
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -79,6 +80,11 @@ class MainViewModel : ViewModel() {
     private val _headcodeFilter     = MutableStateFlow("")
     val headcodeFilter: StateFlow<String> = _headcodeFilter.asStateFlow()
 
+    // Non-null while a headcode global search result is being shown.
+    // Set back to null when the user clears the search or selects a station.
+    private val _headcodeBoard = MutableStateFlow<UiState?>(null)
+    val headcodeBoard: StateFlow<UiState?> = _headcodeBoard.asStateFlow()
+
     private val _trustConnected = MutableStateFlow(false)
     val trustConnected: StateFlow<Boolean> = _trustConnected.asStateFlow()
 
@@ -102,9 +108,6 @@ class MainViewModel : ViewModel() {
     )
     private val _lastKnownLocations = MutableStateFlow<Map<String, TrainLocation>>(emptyMap())
     val lastKnownLocations: StateFlow<Map<String, TrainLocation>> = _lastKnownLocations.asStateFlow()
-
-    private val _journeyActuals = MutableStateFlow<Map<String, Map<String, String>>>(emptyMap())
-    val journeyActuals: StateFlow<Map<String, Map<String, String>>> = _journeyActuals.asStateFlow()
 
     private val _recentStations = MutableStateFlow<List<RecentStation>>(emptyList())
     val recentStations: StateFlow<List<RecentStation>> = _recentStations.asStateFlow()
@@ -131,10 +134,11 @@ class MainViewModel : ViewModel() {
 
     private val cifDepartures     = LinkedHashMap<String, TrainService>()
     private val cifArrivals       = LinkedHashMap<String, TrainService>()
-    private val formationCache    = HashMap<String, DarwinFormation>()
+    // LruCache caps: formationCache at 50 entries (~last 50 headcodes seen per session),
+    // hspCache at 100 route-date combinations. Both are evicted automatically when full.
+    private val formationCache    = LruCache<String, DarwinFormation>(50)
     private val headcodeFromTrust = HashMap<String, String>()
-    // Cache key: "$headcode-$fromCrs-$toCrs" → HspSummary
-    private val hspCache          = HashMap<String, HspSummary>()
+    private val hspCache          = LruCache<String, HspSummary>(100)
 
     init {
         viewModelScope.launch {
@@ -208,7 +212,7 @@ class MainViewModel : ViewModel() {
         }
 
         // Convert HspServiceMetrics → TrainService so the existing board UI works unchanged
-        val services: List<TrainService> = result.services.mapNotNull { s ->
+        val services = result.services.mapNotNull { s ->
             val originCrs  = CorpusData.crsFromTiploc(s.originTiploc) ?: s.originTiploc
             val destCrs    = CorpusData.crsFromTiploc(s.destTiploc)   ?: s.destTiploc
             val originName = StationData.findByCrs(originCrs)?.name
@@ -353,7 +357,7 @@ class MainViewModel : ViewModel() {
             ?: CorpusData.nameFromTiploc(s.destTiploc)
             ?: s.destCrs ?: ""
 
-        val formation    = formationCache[h.uppercase()] ?: formationCache[s.uid.uppercase()]
+        val formation    = formationCache.get(h.uppercase()) ?: formationCache.get(s.uid.uppercase())
         val units        = formation?.units ?: existing?.units ?: emptyList()
         val coaches      = formation?.coachCount ?: existing?.darwinCoachCount ?: 0
 
@@ -423,6 +427,63 @@ class MainViewModel : ViewModel() {
     }
     fun clearHeadcodeFilter() { _headcodeFilter.value = ""; if (lastCrs.isNotEmpty()) doFetch() }
 
+    /**
+     * Attempts to locate a headcode globally (no station required).
+     * Calls back [onFound] with the CRS if the server can place it,
+     * or [onNotFound] if it cannot.
+     */
+    fun locateHeadcodeGlobally(
+        headcode: String,
+        onFound: (crs: String) -> Unit,
+        onNotFound: () -> Unit
+    ) {
+        if (!server.isEnabled) { onNotFound(); return }
+        viewModelScope.launch {
+            val crs = try {
+                server.findHeadcodeStation(headcode.uppercase())
+            } catch (_: Exception) { null }
+            if (!crs.isNullOrEmpty()) onFound(crs) else onNotFound()
+        }
+    }
+
+    /**
+     * Performs a fresh global headcode search: calls /api/headcode/{headcode} and
+     * publishes the result to [headcodeBoard]. The existing station board is left
+     * untouched — MainActivity switches which state to observe.
+     *
+     * [onNotFound] is called (on the main thread) if the server returns 404.
+     */
+    fun fetchHeadcodeBoard(headcode: String, onNotFound: () -> Unit) {
+        if (!server.isEnabled) { onNotFound(); return }
+        autoRefreshJob?.cancel()
+        val hc = headcode.uppercase().trim()
+        _headcodeBoard.value = UiState.Loading
+        viewModelScope.launch {
+            val services = try { server.getHeadcodeBoard(hc) } catch (_: Exception) { emptyList() }
+            if (services == null) {
+                _headcodeBoard.value = null
+                onNotFound()
+                return@launch
+            }
+            val trainServices = services.map { s -> serverServiceToTrain(s, BoardType.DEPARTURES, null) }
+            _headcodeBoard.value = UiState.Success(
+                BoardResult(
+                    stationName     = "Headcode $hc",
+                    crs             = hc,
+                    services        = trainServices,
+                    generatedAt     = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.UK)
+                        .format(java.util.Date()),
+                    boardType       = BoardType.DEPARTURES,
+                    filterCallingAt = "",
+                    timeOffset      = 0
+                )
+            )
+        }
+    }
+
+    /** Clears the headcode board result so the normal station board shows again. */
+    fun clearHeadcodeBoard() { _headcodeBoard.value = null }
+
     private fun startAutoRefresh() {
         autoRefreshJob?.cancel()
         autoRefreshJob = viewModelScope.launch {
@@ -435,9 +496,6 @@ class MainViewModel : ViewModel() {
 
     // ── Calling points ────────────────────────────────────────────────────────
 
-    suspend fun fetchCallingPointsFromServer(uid: String, atCrs: String): CallingPointsResult? =
-        withContext(Dispatchers.IO) { server.getCallingPoints(uid, atCrs) }
-
     // ── KB Incidents ──────────────────────────────────────────────────────────
 
     fun fetchIncidents() {
@@ -445,11 +503,6 @@ class MainViewModel : ViewModel() {
             try { _incidents.value = withContext(Dispatchers.IO) { kb.getIncidents() } } catch (_: Exception) {}
         }
     }
-    fun incidentsForOperator(operatorCode: String): List<KbIncident> {
-        if (operatorCode.isEmpty()) return _incidents.value
-        return _incidents.value.filter { it.operators.isEmpty() || operatorCode in it.operators }
-    }
-
     // ── KB NSI ────────────────────────────────────────────────────────────────
 
     private fun fetchTocDetails() {
@@ -469,8 +522,6 @@ class MainViewModel : ViewModel() {
             try { withContext(Dispatchers.IO) { kb.preloadStations() } } catch (_: Exception) {}
         }
     }
-
-    fun stationInfo(crs: String): KbStation? = kb.getStation(crs)
 
     fun nsiForOperator(operatorCode: String): KbNsiEntry? {
         if (operatorCode.isEmpty()) return null
@@ -503,10 +554,6 @@ class MainViewModel : ViewModel() {
     }
 
     // ── Detail ────────────────────────────────────────────────────────────────
-
-    fun emitCifServiceDetails(details: ServiceDetails) {
-        _detailState.value = DetailState.Success(details)
-    }
 
     fun fetchCifServiceDetails(uid: String, atCrs: String, fallback: ServiceDetails) {
         _detailState.value = DetailState.Loading
@@ -544,7 +591,7 @@ class MainViewModel : ViewModel() {
                     val prev    = if (atIndex > 0) callingPoints.subList(0, atIndex) else emptyList()
                     val subseq  = if (atIndex >= 0 && atIndex < callingPoints.size - 1)
                         callingPoints.subList(atIndex + 1, callingPoints.size)
-                    else callingPoints
+                    else emptyList()
                     _detailState.value = DetailState.Success(
                         fallback.copy(
                             previousCallingPoints   = prev.ifEmpty { fallback.previousCallingPoints },
@@ -600,7 +647,7 @@ class MainViewModel : ViewModel() {
             detailTrainId       = resolved
             detailCallingPoints = callingPoints
             _detailLiveState.value = DetailLiveState()
-            val cached = formationCache[detailTrainId]
+            val cached = formationCache.get(detailTrainId)
             if (cached != null) _detailFormation.value = cached
         }
     }
@@ -616,41 +663,10 @@ class MainViewModel : ViewModel() {
 
     // ── HSP punctuality (via server) ──────────────────────────────────────────
 
-    fun fetchHspForService(serviceId: String, headcode: String, fromCrs: String, toCrs: String) {
-        if (!server.isEnabled || fromCrs.isEmpty() || toCrs.isEmpty()) return
-        val cacheKey = "$headcode-$fromCrs-$toCrs"
-        hspCache[cacheKey]?.let { updateServiceHsp(serviceId, it); return }
-        viewModelScope.launch {
-            try {
-                val today = java.time.LocalDate.now()
-                val fromDate = today.minusDays(Constants.HSP_DAYS_LOOKBACK.toLong()).toString()
-                val toDate   = today.toString()
-                val result = withContext(Dispatchers.IO) {
-                    server.getHspMetrics(fromCrs, toCrs, fromDate, toDate)
-                }
-                if (result != null && result.services.isNotEmpty()) {
-                    // Aggregate across all returned services for an overall punctuality figure
-                    val totalOnTime = result.services.sumOf { it.onTime }
-                    val totalRuns   = result.services.sumOf { it.total }
-                    val pct         = if (totalRuns > 0) (totalOnTime * 100 / totalRuns) else -1
-                    val summary = HspSummary(
-                        headcode       = headcode,
-                        operatorCode   = "",
-                        totalRuns      = totalRuns,
-                        onTimeCount    = totalOnTime,
-                        punctualityPct = pct
-                    )
-                    hspCache[cacheKey] = summary
-                    updateServiceHsp(serviceId, summary)
-                }
-            } catch (_: Exception) {}
-        }
-    }
-
     fun fetchHspForDetail(headcode: String, fromCrs: String, toCrs: String) {
         if (!server.isEnabled || headcode.isEmpty() || fromCrs.isEmpty()) return
         val cacheKey = "$headcode-$fromCrs-$toCrs"
-        hspCache[cacheKey]?.let { _hspSummary.value = it; return }
+        hspCache.get(cacheKey)?.let { _hspSummary.value = it; return }
         viewModelScope.launch {
             try {
                 val today = java.time.LocalDate.now()
@@ -670,22 +686,11 @@ class MainViewModel : ViewModel() {
                         onTimeCount    = totalOnTime,
                         punctualityPct = pct
                     )
-                    hspCache[cacheKey] = summary
+                    hspCache.put(cacheKey, summary)
                     _hspSummary.value = summary
                 }
             } catch (_: Exception) {}
         }
-    }
-
-    private fun updateServiceHsp(serviceId: String, summary: HspSummary) {
-        val current = _uiState.value as? UiState.Success ?: return
-        val updated = current.board.services.map { svc ->
-            if (svc.serviceID == serviceId)
-                svc.copy(punctualityPercent = summary.punctualityPct, hspSampleSize = summary.totalRuns)
-            else svc
-        }
-        if (updated != current.board.services)
-            _uiState.value = current.copy(board = current.board.copy(services = updated))
     }
 
     // ── Server allocation (consist) for service detail ────────────────────────
@@ -725,53 +730,7 @@ class MainViewModel : ViewModel() {
         }
     }
 
-    // ── Allocation feed ───────────────────────────────────────────────────────
-
-    private fun applyFormation(f: DarwinFormation) {
-        fun shouldUpdate(existing: DarwinFormation?) = existing == null || f.units.isNotEmpty() || existing.units.isEmpty()
-        if (f.trainId.isNotEmpty() && shouldUpdate(formationCache[f.trainId.uppercase()])) formationCache[f.trainId.uppercase()] = f
-        if (f.uid.isNotEmpty()     && shouldUpdate(formationCache[f.uid.uppercase()]))     formationCache[f.uid.uppercase()]     = f
-        if (detailTrainId.isNotEmpty() &&
-            (f.trainId.uppercase() == detailTrainId || f.uid.uppercase() == detailTrainId)) {
-            _detailFormation.value = f
-        }
-        val current = _uiState.value as? UiState.Success ?: return
-        val updated = current.board.services.map { service ->
-            val formation = formationCache[service.trainId.uppercase()] ?: formationCache[service.serviceID.uppercase()]
-            if (formation != null) {
-                val alloc = RollingStockData.toUnitAllocation(formation.units, formation.coachCount)
-                service.copy(units = formation.units, darwinCoachCount = formation.coachCount,
-                    rollingStockDesc = RollingStockData.describeFormation(formation.units, formation.coachCount),
-                    unitAllocation = alloc)
-            } else service
-        }
-        if (updated != current.board.services)
-            _uiState.value = current.copy(board = current.board.copy(services = updated))
-    }
-
     // ── TRUST ─────────────────────────────────────────────────────────────────
-
-    fun attachTrustMovements(
-        movements:   SharedFlow<TrustMovement>,
-        activations: SharedFlow<TrustActivation>,
-        connected:   SharedFlow<Boolean>
-    ) {
-        connected.onEach { _trustConnected.value = it }.launchIn(viewModelScope)
-        movements.onEach { applyTrustMovement(it) }.launchIn(viewModelScope)
-        activations.onEach { applyTrustActivation(it) }.launchIn(viewModelScope)
-    }
-
-    private fun applyTrustActivation(a: TrustActivation) {
-        if (a.headcode.isEmpty()) return
-        if (a.originDep.isNotEmpty()) headcodeFromTrust[a.originDep] = a.headcode
-        val current = _uiState.value as? UiState.Success ?: return
-        val updated = current.board.services.map { service ->
-            if (service.trainId.isNotEmpty()) return@map service
-            if (service.std == a.originDep) service.copy(trainId = a.headcode) else service
-        }
-        if (updated != current.board.services)
-            _uiState.value = current.copy(board = current.board.copy(services = updated))
-    }
 
     private fun applyTrustMovement(m: TrustMovement) {
         if (_historicDate.value != null) return
@@ -783,13 +742,6 @@ class MainViewModel : ViewModel() {
             val delay = if (m.scheduledTime.isNotEmpty()) minuteDelay(m.scheduledTime, m.actualTime) else prevDelay
             locMap[m.headcode] = TrainLocation(m.headcode, stationName, m.crs, m.actualTime, m.type, delay)
             _lastKnownLocations.value = locMap
-            if (m.type == "DEPARTURE") {
-                val trail = _journeyActuals.value.toMutableMap()
-                val stops = (trail[m.headcode] ?: linkedMapOf()).toMutableMap()
-                stops[m.crs] = m.actualTime
-                trail[m.headcode] = stops
-                _journeyActuals.value = trail
-            }
         }
 
         if (detailTrainId.isNotEmpty() && m.crs.isNotEmpty()) {

@@ -335,6 +335,46 @@
             android:textColor="@color/status_cancelled"
             android:visibility="gone"/>
 
+        <!-- Empty state — shown when a board loads successfully but has no services -->
+        <LinearLayout
+            android:id="@+id/emptyState"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
+            android:paddingTop="48dp"
+            android:paddingHorizontal="32dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🚉"
+                android:textSize="48sp"/>
+
+            <TextView
+                android:id="@+id/tvEmptyTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="No services found"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="?attr/colorOnSurface"
+                android:layout_marginTop="12dp"/>
+
+            <TextView
+                android:id="@+id/tvEmptySubtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="There are no trains scheduled in this window.\nTry adjusting the time or checking for disruptions."
+                android:textSize="13sp"
+                android:textColor="?attr/colorOnSurface"
+                android:alpha="0.6"
+                android:gravity="center"
+                android:layout_marginTop="8dp"/>
+
+        </LinearLayout>
+
         <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
             android:id="@+id/swipeRefresh"
             android:layout_width="match_parent"

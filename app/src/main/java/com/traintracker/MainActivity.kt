@@ -1,7 +1,6 @@
 package com.traintracker
 
 import android.Manifest
-import android.app.AlertDialog
 import android.app.DatePickerDialog
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -10,17 +9,23 @@ import android.os.Bundle
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.InputMethodManager
+import android.text.Editable
+import android.text.TextWatcher
+import android.widget.AutoCompleteTextView
 import android.widget.BaseAdapter
 import android.widget.Filter
 import android.widget.Filterable
+import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
+import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -42,9 +47,6 @@ class MainActivity : AppCompatActivity() {
 
     private var currentBoardType = BoardType.DEPARTURES
     private var currentCrs       = ""
-
-    // ─── Server API client (replaces DarwinService / Kafka) ─────────────────
-    private val server = ServerApiClient()
 
     // ─── Permission launchers ──────────────────────────────────────────────────
     private val locationPermissionRequest = registerForActivityResult(
@@ -150,10 +152,10 @@ class MainActivity : AppCompatActivity() {
         val autoAdapter = StationAutoCompleteAdapter()
         binding.etCrs.setAdapter(autoAdapter)
         binding.etCrs.threshold = 1
-        binding.etCrs.addTextChangedListener(object : android.text.TextWatcher {
+        binding.etCrs.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-            override fun afterTextChanged(s: android.text.Editable?) {
+            override fun afterTextChanged(s: Editable?) {
                 autoAdapter.updateItems(StationData.search(s?.toString() ?: return))
             }
         })
@@ -208,7 +210,10 @@ class MainActivity : AppCompatActivity() {
     // ─── Filter chips ─────────────────────────────────────────────────────────
     private fun setupFilterChips() {
         binding.chipCallingAt.setOnClickListener { showCallingAtDialog() }
-        binding.chipCallingAt.setOnCloseIconClickListener { viewModel.clearCallingAtFilter() }
+        binding.chipCallingAt.setOnCloseIconClickListener {
+            viewModel.clearHeadcodeBoard()
+            viewModel.clearCallingAtFilter()
+        }
 
         binding.chipOperator.setOnClickListener { showOperatorDialog() }
         binding.chipOperator.setOnCloseIconClickListener { viewModel.clearOperatorFilter() }
@@ -285,16 +290,16 @@ class MainActivity : AppCompatActivity() {
 
     // ─── Calling-at dialog ────────────────────────────────────────────────────
     private fun showCallingAtDialog() {
-        val input = android.widget.AutoCompleteTextView(this).apply {
+        val input = AutoCompleteTextView(this).apply {
             hint = getString(R.string.search_hint)
             threshold = 1
         }
         val autoAdapter = StationAutoCompleteAdapter()
         input.setAdapter(autoAdapter)
-        input.addTextChangedListener(object : android.text.TextWatcher {
+        input.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-            override fun afterTextChanged(s: android.text.Editable?) {
+            override fun afterTextChanged(s: Editable?) {
                 autoAdapter.updateItems(StationData.search(s?.toString() ?: return))
             }
         })
@@ -380,25 +385,24 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun searchByHeadcode(headcode: String) {
-        if (currentCrs.isEmpty()) {
-            android.app.AlertDialog.Builder(this)
-                .setTitle("Search by headcode")
-                .setMessage("Enter a station to search $headcode at:")
-                .setPositiveButton("OK") { _, _ ->
-                    toast("Enter a station in the search box, then type $headcode again")
-                }
-                .show()
-            return
-        }
-        viewModel.setHeadcodeFilter(headcode)
-        binding.chipCallingAt.text = "Headcode: $headcode"
+        // Always do a fresh station-independent search via /api/headcode/{headcode}.
+        // We don't filter the current board — we replace it entirely with the headcode results.
+        currentCrs = ""
+        binding.etCrs.setText(headcode.uppercase())
+        binding.progressBar.visibility = View.VISIBLE
+        viewModel.fetchHeadcodeBoard(
+            headcode = headcode,
+            onNotFound = {
+                binding.progressBar.visibility = View.GONE
+                AlertDialog.Builder(this)
+                    .setTitle("Headcode not found")
+                    .setMessage("$headcode wasn't found in today's schedule. It may not be running today, or the CIF data may not have it yet.")
+                    .setPositiveButton("OK", null)
+                    .show()
+            }
+        )
+        binding.chipCallingAt.text = getString(R.string.filter_headcode, headcode)
         binding.chipCallingAt.isChecked = true
-    }
-
-    private fun clearHeadcodeFilter() {
-        viewModel.clearHeadcodeFilter()
-        binding.chipCallingAt.text = getString(R.string.filter_calling_at)
-        binding.chipCallingAt.isChecked = false
     }
 
     private fun selectStation(station: Station) {
@@ -412,6 +416,9 @@ class MainActivity : AppCompatActivity() {
         updateFavouriteButton()
         val name = StationData.findByCrs(currentCrs)?.name ?: currentCrs
         viewModel.recordRecentStation(currentCrs, name)
+        // Clear any active headcode board so the station board shows fresh
+        viewModel.clearHeadcodeBoard()
+        viewModel.clearHeadcodeFilter()
         search()
     }
 
@@ -484,49 +491,76 @@ class MainActivity : AppCompatActivity() {
     private fun observeUiState() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.uiState.collect { state ->
-                    binding.swipeRefresh.isRefreshing = false
-                    when (state) {
-                        is UiState.Idle -> {
-                            binding.progressBar.visibility = View.GONE
-                            binding.tvError.visibility     = View.GONE
-                            binding.tvHeader.visibility    = View.GONE
-                        }
-                        is UiState.Loading -> {
-                            binding.progressBar.visibility = View.VISIBLE
-                            binding.tvError.visibility     = View.GONE
-                            binding.tvHeader.visibility    = View.GONE
-                            adapter.submitList(emptyList())
-                        }
-                        is UiState.Success -> {
-                            binding.progressBar.visibility = View.GONE
-                            binding.tvError.visibility     = View.GONE
-                            binding.tvHeader.visibility    = View.VISIBLE
-                            // generatedAt holds the date string for historic boards
-                            val genTime = state.board.generatedAt.take(16).replace('T', ' ')
-                            binding.tvHeader.text = getString(
-                                R.string.board_header,
-                                state.board.boardType.label,
-                                state.board.stationName,
-                                genTime
-                            )
-                            if (state.board.services.isEmpty()) {
-                                binding.tvError.text = getString(R.string.no_services_found)
-                                binding.tvError.visibility = View.VISIBLE
-                            } else {
-                                adapter.submitAll(state.board.services, state.board.stationName)
-                            }
-                            showNrccMessages(state.board.nrccMessages)
-                        }
-                        is UiState.Error -> {
-                            binding.progressBar.visibility = View.GONE
-                            binding.tvError.text = getString(R.string.error_prefix, state.message)
-                            binding.tvError.visibility  = View.VISIBLE
-                            binding.tvHeader.visibility = View.GONE
-                            adapter.submitList(emptyList())
+                // Combine both flows so headcodeBoard always takes priority — no race condition
+                kotlinx.coroutines.flow.combine(
+                    viewModel.headcodeBoard,
+                    viewModel.uiState
+                ) { hcState, normalState -> hcState to normalState }
+                    .collect { (hcState, normalState) ->
+                        binding.swipeRefresh.isRefreshing = false
+                        if (hcState != null) {
+                            renderState(hcState, isHeadcodeBoard = true)
+                        } else {
+                            renderState(normalState, isHeadcodeBoard = false)
                         }
                     }
+            }
+        }
+    }
+
+    private fun renderState(state: UiState, isHeadcodeBoard: Boolean) {
+        when (state) {
+            is UiState.Idle -> {
+                binding.progressBar.visibility = View.GONE
+                binding.tvError.visibility     = View.GONE
+                binding.emptyState.visibility  = View.GONE
+                binding.tvHeader.visibility    = View.GONE
+            }
+            is UiState.Loading -> {
+                binding.progressBar.visibility = View.VISIBLE
+                binding.tvError.visibility     = View.GONE
+                binding.emptyState.visibility  = View.GONE
+                binding.tvHeader.visibility    = View.GONE
+                adapter.submitList(emptyList())
+            }
+            is UiState.Success -> {
+                binding.progressBar.visibility = View.GONE
+                binding.tvError.visibility     = View.GONE
+                binding.tvHeader.visibility    = View.VISIBLE
+                val genTime = state.board.generatedAt.take(16).replace('T', ' ')
+                binding.tvHeader.text = getString(
+                    R.string.board_header,
+                    state.board.boardType.label,
+                    state.board.stationName,
+                    genTime
+                )
+                if (state.board.services.isEmpty()) {
+                    binding.emptyState.visibility = View.VISIBLE
+                    binding.tvEmptySubtitle.text = when {
+                        isHeadcodeBoard ->
+                            "No schedule found for this headcode. It may not be running today."
+                        viewModel.historicDate.value != null ->
+                            "No services were recorded for this station on that date."
+                        viewModel.filterCallingAt.value.isNotEmpty() ||
+                                viewModel.filterOperator.value.isNotEmpty() ->
+                            "No services match your current filters.\nTry clearing a filter to see more results."
+                        else ->
+                            "There are no trains scheduled in this window.\nTry adjusting the time or checking for disruptions."
+                    }
+                    adapter.submitList(emptyList())
+                } else {
+                    binding.emptyState.visibility = View.GONE
+                    adapter.submitAll(state.board.services, state.board.stationName)
                 }
+                if (!isHeadcodeBoard) showNrccMessages(state.board.nrccMessages)
+            }
+            is UiState.Error -> {
+                binding.progressBar.visibility = View.GONE
+                binding.emptyState.visibility  = View.GONE
+                binding.tvError.text = getString(R.string.error_prefix, state.message)
+                binding.tvError.visibility  = View.VISIBLE
+                binding.tvHeader.visibility = View.GONE
+                adapter.submitList(emptyList())
             }
         }
     }
@@ -537,11 +571,29 @@ class MainActivity : AppCompatActivity() {
                 launch {
                     viewModel.filterCallingAt.collect { crs ->
                         if (crs.isEmpty()) {
-                            binding.chipCallingAt.text = getString(R.string.filter_calling_at)
-                            binding.chipCallingAt.isCloseIconVisible = false
+                            // Only reset chip to default if there's no active headcode board
+                            if (viewModel.headcodeBoard.value == null) {
+                                binding.chipCallingAt.text = getString(R.string.filter_calling_at)
+                                binding.chipCallingAt.isCloseIconVisible = false
+                                binding.chipCallingAt.isChecked = false
+                            }
                         } else {
                             val name = StationData.findByCrs(crs)?.name ?: crs
                             binding.chipCallingAt.text = getString(R.string.filter_calling_at_active, name)
+                            binding.chipCallingAt.isCloseIconVisible = true
+                        }
+                    }
+                }
+                launch {
+                    viewModel.headcodeBoard.collect { hcState ->
+                        if (hcState == null) {
+                            // Headcode board was cleared — reset chip unless calling-at filter is active
+                            if (viewModel.filterCallingAt.value.isEmpty()) {
+                                binding.chipCallingAt.text = getString(R.string.filter_calling_at)
+                                binding.chipCallingAt.isCloseIconVisible = false
+                                binding.chipCallingAt.isChecked = false
+                            }
+                        } else {
                             binding.chipCallingAt.isCloseIconVisible = true
                         }
                     }
@@ -580,7 +632,7 @@ class MainActivity : AppCompatActivity() {
                     if (connected) {
                         binding.tvLiveIndicator.visibility = View.VISIBLE
                         binding.tvLiveIndicator.text = getString(R.string.live_indicator)
-                        binding.tvLiveIndicator.setTextColor(getColor(android.R.color.holo_green_dark))
+                        binding.tvLiveIndicator.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.status_ontime))
                     } else {
                         binding.tvLiveIndicator.visibility = View.GONE
                     }
@@ -653,7 +705,7 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.tick.collect {
-                    adapter.notifyItemRangeChanged(0, adapter.itemCount)
+                    adapter.notifyTick()
                 }
             }
         }

@@ -9,6 +9,18 @@ import android.os.Parcelable
 fun resolveReasonCode(code: String): String  = ReasonCodes.resolveCancel(code)
 fun resolveCancelCode(code: String): String  = ReasonCodes.resolveCancel(code)
 
+// ─── JSON sanitisation helper ─────────────────────────────────────────────────
+
+/**
+ * Like [org.json.JSONObject.optString] but treats the literal string "null"
+ * (which the server occasionally returns for missing fields) as absent,
+ * returning [fallback] instead.
+ */
+fun org.json.JSONObject.safeString(key: String, fallback: String = ""): String {
+    val v = optString(key, fallback)
+    return if (v == "null") fallback else v
+}
+
 
 // ─── Time helpers ─────────────────────────────────────────────────────────────
 
@@ -142,15 +154,15 @@ enum class ScheduleTag(val label: String) {
 
 // ─── Service category (used for filtering + display) ─────────────────────────
 
-enum class ServiceCategory(val displayName: String, val filterKey: String) {
-    PASSENGER("Passenger",    "passenger"),
-    FREIGHT("Freight",        "freight"),
-    ECS("Empty Stock",        "ecs"),
-    RAILTOUR("Railtour",      "railtour"),
-    LIGHT_ENGINE("Light Eng", "lightengine"),
-    BUS("Bus Replace",        "bus"),
-    FERRY("Ferry",            "ferry"),
-    SPECIAL("Special",        "special")
+enum class ServiceCategory {
+    PASSENGER,
+    FREIGHT,
+    ECS,
+    RAILTOUR,
+    LIGHT_ENGINE,
+    BUS,
+    FERRY,
+    SPECIAL
 }
 
 // ─── TrainService ─────────────────────────────────────────────────────────────
@@ -335,22 +347,6 @@ data class TrainService(
         ServiceCategory.SPECIAL      -> "⚡"
         else                         -> ""
     }
-
-    /** Share / clipboard text for this service. */
-    fun shareText(stationName: String): String = buildString {
-        append("$scheduledTime $origin → $destination")
-        if (platform.isNotEmpty()) append(" · Plat $platform")
-        append("\n")
-        append("Status: $statusDisplay")
-        if (delayMinutes > 0) append(" (+${delayMinutes} min)")
-        append("\n")
-        if (trainId.isNotEmpty()) append("Headcode: $trainId\n")
-        if (operator.isNotEmpty()) append("Operator: $operator\n")
-        if (unitAllocation != null) append("Units: ${unitAllocation.summary}\n")
-        if (journeyMinutes > 0) append("Journey: ${formatDuration(journeyMinutes)}\n")
-        if (tourName.isNotEmpty()) append("Tour: $tourName\n")
-        append("via Train Tracker · $stationName")
-    }
 }
 
 // ─── UnitAllocation ───────────────────────────────────────────────────────────
@@ -490,19 +486,6 @@ data class ServiceDetails(
 // ─── RecentStation ────────────────────────────────────────────────────────────
 
 data class RecentStation(val crs: String, val name: String, val timestamp: Long = System.currentTimeMillis())
-
-// ─── HspRecord ────────────────────────────────────────────────────────────────
-
-/** One historical performance record from the HSP API. */
-data class HspRecord(
-    val serviceId: String,          // RID or headcode
-    val operatorCode: String,
-    val scheduledDeparture: String,
-    val actualDeparture: String,
-    val delayMinutes: Int,
-    val cancelled: Boolean,
-    val date: String                // yyyy-MM-dd
-)
 
 data class HspSummary(
     val headcode: String,

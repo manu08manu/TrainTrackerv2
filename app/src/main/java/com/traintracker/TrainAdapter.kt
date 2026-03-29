@@ -50,11 +50,21 @@ class TrainAdapter(
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) = holder.bind(getItem(position))
 
+    override fun onBindViewHolder(holder: ViewHolder, position: Int, payloads: List<Any>) {
+        if (payloads.isEmpty()) {
+            holder.bind(getItem(position))
+        } else {
+            // Lightweight tick refresh — only update time-sensitive fields
+            if (payloads.contains(PAYLOAD_TICK)) holder.bindTick(getItem(position))
+        }
+    }
+
     inner class ViewHolder(private val b: ItemTrainBinding) :
         RecyclerView.ViewHolder(b.root) {
 
+        private val ctx get() = b.root.context
+
         fun bind(s: TrainService) {
-            val ctx = b.root.context
 
             // ── Scheduled time ────────────────────────────────────────────────
             b.tvTime.text = formatTimeFromIso(s.scheduledTime)
@@ -167,7 +177,7 @@ class TrainAdapter(
             val logoName = TocData.logoDrawableName(s.operatorCode)
                 .ifEmpty { TocData.logoDrawableName(s.operator) }
             val resId = if (logoName.isNotEmpty())
-                ctx.resources.getIdentifier(logoName, "drawable", ctx.packageName) else 0
+                TocData.logoDrawableRes(logoName, ctx) else 0
 
             if (resId != 0) {
                 b.imgTocLogo.setImageResource(resId)
@@ -289,9 +299,29 @@ class TrainAdapter(
                 true
             }
         }
+
+        /** Lightweight refresh — only updates countdown and status text without rebinding the whole item. */
+        fun bindTick(s: TrainService) {
+            val countdown = s.countdownLabel
+            b.tvCountdown.text       = countdown
+            b.tvCountdown.visibility = if (countdown.isNotEmpty()) View.VISIBLE else View.GONE
+            val statusColour = when {
+                s.isCancelled -> colourCancelled
+                s.isDelayed   -> colourDelayed
+                else          -> colourOnTime
+            }
+            b.tvStatus.text = s.statusDisplay
+            b.tvStatus.setTextColor(statusColour)
+        }
+    }
+
+    /** Notify only countdown/status fields changed — avoids full rebind and logo flicker. */
+    fun notifyTick() {
+        for (i in 0 until itemCount) notifyItemChanged(i, PAYLOAD_TICK)
     }
 
     companion object {
+        const val PAYLOAD_TICK = "tick"
         private val DIFF = object : DiffUtil.ItemCallback<TrainService>() {
             override fun areItemsTheSame(a: TrainService, b: TrainService) =
                 a.serviceID == b.serviceID && a.std == b.std

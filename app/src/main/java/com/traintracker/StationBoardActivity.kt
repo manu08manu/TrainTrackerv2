@@ -2,14 +2,18 @@ package com.traintracker
 
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.net.toUri
+import androidx.core.view.isEmpty
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -136,14 +140,14 @@ class StationBoardActivity : AppCompatActivity() {
 
     // ── Tabs ──────────────────────────────────────────────────────────────────
     private fun setupTabs() {
-        BoardType.values().forEach { type ->
+        BoardType.entries.forEach { type ->
             binding.tabLayout.addTab(binding.tabLayout.newTab().setText(type.label))
         }
         binding.tabLayout.getTabAt(2)?.select()
 
         binding.tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab) {
-                currentBoardType = BoardType.values()[tab.position]
+                currentBoardType = BoardType.entries[tab.position]
                 viewModel.fetchBoard(currentCrs, currentBoardType)
             }
             override fun onTabUnselected(tab: TabLayout.Tab) {}
@@ -212,7 +216,7 @@ class StationBoardActivity : AppCompatActivity() {
                     c.drawRect(item.left.toFloat(), item.top.toFloat(),
                         item.left + dX, item.bottom.toFloat(), paint)
                     val iconPaint = android.graphics.Paint().apply {
-                        color       = android.graphics.Color.WHITE
+                        color       = Color.WHITE
                         textSize    = item.height * 0.45f
                         textAlign   = android.graphics.Paint.Align.LEFT
                         isAntiAlias = true
@@ -334,11 +338,11 @@ class StationBoardActivity : AppCompatActivity() {
                 text = "ℹ ${msg.take(50)}${if (msg.length > 50) "…" else ""}"
                 textSize = 11f
                 isClickable = true
-                chipBackgroundColor = android.content.res.ColorStateList.valueOf(severity)
+                chipBackgroundColor = ColorStateList.valueOf(severity)
                 setTextColor(Color.WHITE)
-                layoutParams = android.view.ViewGroup.MarginLayoutParams(
-                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
-                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+                layoutParams = ViewGroup.MarginLayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
                 ).apply { marginEnd = 8 }
                 setOnClickListener {
                     AlertDialog.Builder(this@StationBoardActivity)
@@ -383,7 +387,7 @@ class StationBoardActivity : AppCompatActivity() {
                     }
 
                     if (active.isEmpty()) {
-                        if (container.childCount == 0) binding.incidentsBanner.visibility = View.GONE
+                        if (container.isEmpty()) binding.incidentsBanner.visibility = View.GONE
                         return@collect
                     }
                     binding.incidentsBanner.visibility = View.VISIBLE
@@ -391,11 +395,11 @@ class StationBoardActivity : AppCompatActivity() {
                         val chip = Chip(this@StationBoardActivity).apply {
                             text = if (incident.isPlanned) "🔧 ${incident.summary}" else "⚠ ${incident.summary}"
                             textSize = 11f
-                            chipBackgroundColor = android.content.res.ColorStateList.valueOf(0xFFB71C1C.toInt())
+                            chipBackgroundColor = ColorStateList.valueOf(0xFFB71C1C.toInt())
                             setTextColor(Color.WHITE)
-                            layoutParams = android.view.ViewGroup.MarginLayoutParams(
-                                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
-                                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+                            layoutParams = ViewGroup.MarginLayoutParams(
+                                ViewGroup.LayoutParams.WRAP_CONTENT,
+                                ViewGroup.LayoutParams.WRAP_CONTENT
                             ).apply { marginEnd = 8 }
                             setOnClickListener {
                                 val msg = if (incident.description.isNotEmpty() &&
@@ -447,7 +451,7 @@ class StationBoardActivity : AppCompatActivity() {
                         val chip = Chip(this@StationBoardActivity).apply {
                             text = "✓ Good service on all operators"
                             textSize = 11f
-                            chipBackgroundColor = android.content.res.ColorStateList.valueOf(0xFF2E7D32.toInt())
+                            chipBackgroundColor = ColorStateList.valueOf(0xFF2E7D32.toInt())
                             setTextColor(Color.WHITE)
                         }
                         container.addView(chip)
@@ -469,11 +473,11 @@ class StationBoardActivity : AppCompatActivity() {
                         val chip = Chip(this@StationBoardActivity).apply {
                             text = chipLabel
                             textSize = 11f
-                            chipBackgroundColor = android.content.res.ColorStateList.valueOf(bgColor)
+                            chipBackgroundColor = ColorStateList.valueOf(bgColor)
                             setTextColor(Color.WHITE)
-                            layoutParams = android.view.ViewGroup.MarginLayoutParams(
-                                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
-                                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+                            layoutParams = ViewGroup.MarginLayoutParams(
+                                ViewGroup.LayoutParams.WRAP_CONTENT,
+                                ViewGroup.LayoutParams.WRAP_CONTENT
                             ).apply { marginEnd = 8 }
                             setOnClickListener {
                                 showNsiDetail(entry)
@@ -514,7 +518,7 @@ class StationBoardActivity : AppCompatActivity() {
             1 -> {
                 dialog.setNeutralButton("More info") { _, _ ->
                     startActivity(Intent(Intent.ACTION_VIEW,
-                        android.net.Uri.parse(entry.disruptions[0].url)))
+                        entry.disruptions[0].url.toUri()))
                 }
             }
             else -> {
@@ -527,7 +531,7 @@ class StationBoardActivity : AppCompatActivity() {
                         .setTitle("${entry.tocName} — Active disruptions")
                         .setItems(labels) { _, which ->
                             startActivity(Intent(Intent.ACTION_VIEW,
-                                android.net.Uri.parse(entry.disruptions[which].url)))
+                                entry.disruptions[which].url.toUri()))
                         }
                         .setNegativeButton("Close", null)
                         .show()
@@ -540,7 +544,7 @@ class StationBoardActivity : AppCompatActivity() {
             dialog.setNegativeButton("Live updates @${entry.twitterHandle}") { _, _ ->
                 val handle = entry.twitterHandle
                 val twitterIntent = Intent(Intent.ACTION_VIEW,
-                    android.net.Uri.parse("https://x.com/$handle"))
+                    "https://x.com/$handle".toUri())
                 startActivity(twitterIntent)
             }
         }

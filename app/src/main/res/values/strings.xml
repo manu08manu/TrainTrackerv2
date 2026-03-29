@@ -83,4 +83,18 @@ Performance data not available (set HSP_USERNAME/PASSWORD)
     <string name="label_recents">Recent:</string>
     <!-- Share -->
     <string name="share_service">Share service</string>
+    <!-- ServiceDetailActivity live banner + unit card -->
+    <string name="filter_headcode">Headcode: %s</string>
+    <string name="service_title_route">%1$s → %2$s</string>
+    <string name="service_cancelled">Service cancelled</string>
+    <string name="verb_departed">Departed</string>
+    <string name="verb_at">At</string>
+    <string name="delay_late"> · +%dm late</string>
+    <string name="delay_early"> · %dm early</string>
+    <string name="delay_on_time"> · On time</string>
+    <string name="live_location_text">%1$s %2$s%3$s</string>
+    <string name="label_unit_allocation">Unit allocation</string>
+    <string name="label_formation">Formation</string>
+    <string name="coach_count">%d coaches</string>
+    <string name="punctuality_runs">%d runs</string>
 </resources>
