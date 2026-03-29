@@ -120,6 +120,8 @@ class MainActivity : AppCompatActivity() {
                     coachCount  = service.darwinCoachCount,
                     isPassingService = service.isServicePassing,
                     platform    = service.platform,
+                    isCancelled = service.isCancelled,
+                    cancelReason = service.cancelReason
                 )
             }
         )
@@ -197,6 +199,10 @@ class MainActivity : AppCompatActivity() {
                 if (newDark) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
             )
         }
+
+        binding.btnHistory.setOnClickListener {
+            HspActivity.start(this)
+        }
     }
 
     // ─── Filter chips ─────────────────────────────────────────────────────────
@@ -267,7 +273,7 @@ class MainActivity : AppCompatActivity() {
                         binding.btnTimeNext.isEnabled = true
                     } else {
                         // Historic mode — show date in the time label
-                        binding.tvTimeOffset.text = HspHistoricBoard.formatDate(date)
+                        binding.tvTimeOffset.text = formatHistoricDate(date)
                         // Disable forward/back arrows in historic mode (use date picker instead)
                         binding.btnTimePrev.isEnabled = false
                         binding.btnTimeNext.isEnabled = false

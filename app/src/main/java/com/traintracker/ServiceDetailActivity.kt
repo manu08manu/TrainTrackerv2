@@ -49,6 +49,8 @@ class ServiceDetailActivity : AppCompatActivity() {
         private const val EXTRA_COACHES    = "coaches"
         private const val EXTRA_PREV_CALLING_POINTS = "prev_calling_points"
         private const val EXTRA_SUBS_CALLING_POINTS = "subs_calling_points"
+        private const val EXTRA_IS_CANCELLED  = "is_cancelled"
+        private const val EXTRA_CANCEL_REASON  = "cancel_reason"
         private const val EXTRA_IS_PASSING          = "is_passing"
         private const val EXTRA_PLATFORM            = "platform"
 
@@ -59,7 +61,9 @@ class ServiceDetailActivity : AppCompatActivity() {
                   previousCallingPoints: List<CallingPoint> = emptyList(),
                   subsequentCallingPoints: List<CallingPoint> = emptyList(),
                   isPassingService: Boolean = false,
-                  platform: String = "") {
+                  platform: String = "",
+                  isCancelled: Boolean = false,
+                  cancelReason: String = "") {
             ctx.startActivity(Intent(ctx, ServiceDetailActivity::class.java).apply {
                 putExtra(EXTRA_SERVICE_ID, serviceId)
                 putExtra(EXTRA_HEADCODE,   headcode)
@@ -75,6 +79,8 @@ class ServiceDetailActivity : AppCompatActivity() {
                 putParcelableArrayListExtra(EXTRA_SUBS_CALLING_POINTS, ArrayList(subsequentCallingPoints))
                 putExtra(EXTRA_IS_PASSING, isPassingService)
                 putExtra(EXTRA_PLATFORM,   platform)
+                putExtra(EXTRA_IS_CANCELLED, isCancelled)
+                putExtra(EXTRA_CANCEL_REASON, cancelReason)
             })
         }
     }
@@ -116,7 +122,7 @@ class ServiceDetailActivity : AppCompatActivity() {
             rsid                    = serviceId,
             operator                = "",
             operatorCode            = "",
-            isCancelled             = false,
+            isCancelled             = intent.getBooleanExtra(EXTRA_IS_CANCELLED, false),
             platform                = boardPlatform,
             origin                  = origin,
             destination             = dest,
@@ -234,16 +240,20 @@ class ServiceDetailActivity : AppCompatActivity() {
                             binding.progressBar.visibility  = View.GONE
                             binding.tvError.visibility      = View.GONE
                             binding.contentGroup.visibility = View.VISIBLE
-                            cachedDetails = state.details
+                            // Preserve board-level cancellation if server doesn't know yet
+                            val boardCancelled = intent.getBooleanExtra(EXTRA_IS_CANCELLED, false)
+                            val mergedDetails = if (boardCancelled && !state.details.isCancelled)
+                                state.details.copy(isCancelled = true) else state.details
+                            cachedDetails = mergedDetails
                             if (trainHeadcode.isEmpty()) {
-                                trainHeadcode = state.details.trainId
+                                trainHeadcode = mergedDetails.trainId
                                 viewModel.trackDetailService(trainHeadcode,
-                                    state.details.cifSubsequentCallingPoints
-                                        .ifEmpty { state.details.subsequentCallingPoints })
+                                    mergedDetails.cifSubsequentCallingPoints
+                                        .ifEmpty { mergedDetails.subsequentCallingPoints })
                                 viewModel.fetchHspForDetail(trainHeadcode, queryCrs, destCrs)
                             }
-                            bindHeader(state.details, boardUnits, boardCoaches)
-                            rebuildAdapter(state.details)
+                            bindHeader(mergedDetails, boardUnits, boardCoaches)
+                            rebuildAdapter(mergedDetails)
                         }
                         is DetailState.Error   -> {
                             binding.progressBar.visibility  = View.GONE
@@ -474,7 +484,8 @@ class ServiceDetailActivity : AppCompatActivity() {
                     else                 -> pt.et          // original board ETA
                 },
                 platform    = updatedPlatform ?: pt.platform,
-                isCancelled = isCancelledStop || pt.isCancelled
+                isCancelled = isCancelledStop || pt.isCancelled || live.isCancelled
+                    || intent.getBooleanExtra(EXTRA_IS_CANCELLED, false)
             )
         }
 

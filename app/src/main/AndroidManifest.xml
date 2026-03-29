@@ -30,6 +30,7 @@
         <activity android:name=".ServiceDetailActivity"/>
         <activity android:name=".StationBoardActivity"/>
         <activity android:name=".StationInfoActivity"/>
+        <activity android:name=".HspActivity"/>
 
         <provider
             android:name="androidx.startup.InitializationProvider"

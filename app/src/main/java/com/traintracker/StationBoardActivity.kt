@@ -171,7 +171,9 @@ class StationBoardActivity : AppCompatActivity() {
                     previousCallingPoints   = service.previousCallingPoints,
                     subsequentCallingPoints = service.subsequentCallingPoints,
                     isPassingService        = service.isServicePassing,
-                    platform    = service.platform
+                    platform    = service.platform,
+                    isCancelled = service.isCancelled,
+                    cancelReason = service.cancelReason
                 )
             }
         )

@@ -249,7 +249,11 @@ class TrainAdapter(
             b.tvAlertIcon.setOnClickListener {
                 val nsi = nsiLookup?.invoke(s.operatorCode)
                 val msg = buildString {
-                    if (s.isCancelled) appendLine("This service is cancelled.")
+                    if (s.isCancelled) {
+                        val reason = if (s.cancelReason.isNotEmpty()) ReasonCodes.resolveCancel(s.cancelReason) else ""
+                        if (reason.isNotEmpty()) appendLine("Cancelled: $reason")
+                        else appendLine("This service is cancelled.")
+                    }
                     else if (s.isDelayed) appendLine("Running late: ${s.etd}")
                     if (nsi != null && !nsi.isGood) {
                         if (isNotEmpty()) appendLine()

@@ -4,10 +4,10 @@ import java.util.Calendar
 import android.os.Parcel
 import android.os.Parcelable
 
-// ─── Darwin reason code lookup ────────────────────────────────────────────────
+// ─── TRUST reason code lookup ──────────────────────────────────────────────────
 
-fun resolveReasonCode(code: String): String  = DarwinReasonCodes.resolveDelay(code)
-fun resolveCancelCode(code: String): String  = DarwinReasonCodes.resolveCancel(code)
+fun resolveReasonCode(code: String): String  = ReasonCodes.resolveCancel(code)
+fun resolveCancelCode(code: String): String  = ReasonCodes.resolveCancel(code)
 
 
 // ─── Time helpers ─────────────────────────────────────────────────────────────

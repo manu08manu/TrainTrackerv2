@@ -3,13 +3,19 @@ package com.traintracker
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.SocketTimeoutException
 import java.util.concurrent.TimeUnit
 
 class ServerApiClient {
@@ -29,6 +35,81 @@ class ServerApiClient {
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
+
+    // 180s to cover worst-case uncached full-day HSP queries (4 chunks × ~40s each)
+    private val sseHttp = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(180, TimeUnit.SECONDS)
+        .build()
+
+    // ── HSP progress event ─────────────────────────────────────────────────────
+    data class HspProgressEvent(
+        val progress: Int,
+        val services: List<HspServiceMetrics>,
+        val done: Boolean = false,
+        val timedOut: Boolean = false   // true = caller should show retry message
+    )
+
+    /**
+     * Fetches HSP metrics and emits a single [HspProgressEvent] with the full result.
+     * Runs on Dispatchers.IO via flowOn — safe to collect on any coroutine.
+     *
+     * On timeout emits a sentinel event with [HspProgressEvent.timedOut] = true so the
+     * UI can show "Search timed out — please try again" rather than a generic error.
+     * Results are cached server-side so a retry will be fast.
+     */
+    fun streamHspMetrics(
+        fromCrs:  String,
+        toCrs:    String,
+        fromDate: String,
+        fromTime: String = "0000",
+        toTime:   String = "2359"
+    ): Flow<HspProgressEvent> = flow {
+        val url = "$baseUrl/api/hsp/metrics/stream" +
+                "?from=${fromCrs.uppercase()}&to=${toCrs.uppercase()}" +
+                "&date=$fromDate&from_time=$fromTime&to_time=$toTime"
+
+        val request = Request.Builder().url(url).build()
+        try {
+            val response = sseHttp.newCall(request).execute()
+            if (!response.isSuccessful) {
+                Log.w(TAG, "streamHspMetrics failed: HTTP ${response.code}")
+                return@flow
+            }
+            val body = response.body?.string() ?: run {
+                Log.w(TAG, "streamHspMetrics: empty body")
+                response.close()
+                return@flow
+            }
+            response.close()
+            val json = JSONObject(body)
+            val svcsArr = json.optJSONArray("services") ?: JSONArray()
+            val services = (0 until svcsArr.length()).mapNotNull { i ->
+                val s = svcsArr.optJSONObject(i) ?: return@mapNotNull null
+                HspServiceMetrics(
+                    rid             = s.optString("rid"),
+                    originTiploc    = s.optString("originTiploc"),
+                    destTiploc      = s.optString("destTiploc"),
+                    scheduledDep    = s.optString("scheduledDep"),
+                    scheduledArr    = s.optString("scheduledArr"),
+                    tocCode         = s.optString("tocCode"),
+                    matchedServices = s.optInt("matchedServices"),
+                    onTime          = s.optInt("onTime"),
+                    total           = s.optInt("total"),
+                    punctualityPct  = s.optInt("punctualityPct", -1)
+                )
+            }
+            emit(HspProgressEvent(100, services, done = true))
+        } catch (e: SocketTimeoutException) {
+            // First load of an uncached route can exceed even 180s on a slow HSP API day.
+            // Emit a timeout sentinel — the UI should prompt the user to retry.
+            // The server caches chunks as they complete, so a retry will be faster.
+            Log.w(TAG, "streamHspMetrics timed out for $fromCrs→$toCrs $fromDate — emitting retry sentinel")
+            emit(HspProgressEvent(0, emptyList(), done = false, timedOut = true))
+        } catch (e: Exception) {
+            Log.w(TAG, "streamHspMetrics error: ${e.javaClass.simpleName}: ${e.message}", e)
+        }
+    }.flowOn(Dispatchers.IO)
 
     private val _movements   = MutableSharedFlow<TrustMovement>(extraBufferCapacity = 256)
     val movements: SharedFlow<TrustMovement> = _movements
@@ -66,6 +147,13 @@ class ServerApiClient {
                     delayMinutes = json.optInt("delayMinutes", 0)
                 )
             } catch (e: Exception) { null }
+        }
+
+    suspend fun resolveHeadcode(headcode: String): String =
+        withContext(Dispatchers.IO) {
+            try {
+                get("/api/trust/resolve/$headcode")?.optString("resolved")?.ifEmpty { headcode } ?: headcode
+            } catch (e: Exception) { headcode }
         }
 
     suspend fun getDepartures(crs: String, windowMinutes: Int = 120, offset: Int = 0): List<ServerService> =
@@ -116,17 +204,6 @@ class ServerApiClient {
             }
         }
 
-    /**
-     * Fetches consist/allocation for [headcode] on [date] (ISO yyyy-MM-dd).
-     *
-     * The endpoint only accepts a 4-char headcode. When multiple services share
-     * the same headcode the server returns a JSON array. [uid] (the CIF UID,
-     * e.g. "C41070") is used to find the correct entry by matching array elements
-     * whose coreId starts with headcode+uid — the coreId format is headcode+uid+suffix
-     * so startsWith is the correct comparison. Falls back to null if no match.
-     *
-     * Returns null if the server is unreachable, returns no data, or parsing fails.
-     */
     suspend fun getAllocation(headcode: String, date: String, uid: String = ""): AllocationInfo? =
         withContext(Dispatchers.IO) {
             try {
@@ -149,15 +226,12 @@ class ServerApiClient {
                             return@withContext null
                         }
                         if (uid.isEmpty()) {
-                            // No uid to disambiguate — only safe if there's exactly one result.
                             if (arr.length() > 1) {
                                 Log.w(TAG, "getAllocation: ${arr.length()} results for $headcode but no uid to disambiguate — skipping")
                                 return@withContext null
                             }
                             arr.getJSONObject(0)
                         } else {
-                            // coreId format is headcode+uid+suffix (e.g. "1S16C4107012" for headcode="1S16", uid="C41070").
-                            // Use startsWith rather than == because the suffix length varies.
                             val expectedPrefix = "$headcode$uid"
                             var matched: JSONObject? = null
                             for (i in 0 until arr.length()) {
@@ -199,6 +273,87 @@ class ServerApiClient {
                 null
             }
         }
+
+    suspend fun getHspMetrics(
+        fromCrs:  String,
+        toCrs:    String,
+        fromDate: String,
+        toDate:   String  = fromDate,
+        fromTime: String  = "0000",
+        toTime:   String  = "2359"
+    ): HspMetricsResult? = withContext(Dispatchers.IO) {
+        try {
+            val body = org.json.JSONObject().apply {
+                put("from_loc",  fromCrs.uppercase())
+                put("to_loc",    toCrs.uppercase())
+                put("from_date", fromDate)
+                put("to_date",   toDate)
+                put("from_time", fromTime)
+                put("to_time",   toTime)
+            }
+            val raw = postRaw("/api/hsp/metrics", body.toString()) ?: return@withContext null
+            val json = org.json.JSONObject(raw)
+            val svcs = json.optJSONArray("services") ?: return@withContext null
+            val services = (0 until svcs.length()).mapNotNull { i ->
+                val s = svcs.optJSONObject(i) ?: return@mapNotNull null
+                HspServiceMetrics(
+                    rid            = s.optString("rid"),
+                    originTiploc   = s.optString("originTiploc"),
+                    destTiploc     = s.optString("destTiploc"),
+                    scheduledDep   = s.optString("scheduledDep"),
+                    scheduledArr   = s.optString("scheduledArr"),
+                    tocCode        = s.optString("tocCode"),
+                    matchedServices = s.optInt("matchedServices"),
+                    onTime         = s.optInt("onTime"),
+                    total          = s.optInt("total"),
+                    punctualityPct = s.optInt("punctualityPct", -1)
+                )
+            }
+            HspMetricsResult(services)
+        } catch (e: Exception) {
+            Log.w(TAG, "getHspMetrics error: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun getHspDetails(rid: String, scheduledDep: String = ""): HspDetailsResult? = withContext(Dispatchers.IO) {
+        try {
+            val body = org.json.JSONObject().apply {
+                put("rid", rid)
+                if (scheduledDep.isNotEmpty()) put("scheduled_dep", scheduledDep)
+            }
+            val raw  = postRaw("/api/hsp/details", body.toString()) ?: return@withContext null
+            val json = org.json.JSONObject(raw)
+            val locs = json.optJSONArray("locations") ?: return@withContext null
+            HspDetailsResult(
+                rid       = json.optString("rid"),
+                date      = json.optString("date"),
+                tocCode   = json.optString("tocCode"),
+                unit      = json.optString("unit"),
+                units     = json.optJSONArray("units")?.let { a ->
+                    (0 until a.length()).map { a.getString(it) }
+                } ?: emptyList(),
+                vehicles  = json.optJSONArray("vehicles")?.let { a ->
+                    (0 until a.length()).map { a.getString(it) }
+                } ?: emptyList(),
+                unitCount = json.optInt("unitCount", 0),
+                locations = (0 until locs.length()).mapNotNull { i ->
+                    val l = locs.optJSONObject(i) ?: return@mapNotNull null
+                    HspLocationResult(
+                        tiploc       = l.optString("tiploc"),
+                        scheduledDep = l.optString("scheduledDep"),
+                        scheduledArr = l.optString("scheduledArr"),
+                        actualDep    = l.optString("actualDep"),
+                        actualArr    = l.optString("actualArr"),
+                        cancelReason = l.optString("cancelReason")
+                    )
+                }
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "getHspDetails error: ${e.message}")
+            null
+        }
+    }
 
     suspend fun getStatus(): ServerStatus? =
         withContext(Dispatchers.IO) {
@@ -247,7 +402,9 @@ class ServerApiClient {
                 originTiploc  = s.optString("originTiploc"),
                 destTiploc    = s.optString("destTiploc"),
                 actualTime    = s.optString("actualTime").let { if (it == "null") "" else it },
-                isCancelled   = s.optBoolean("isCancelled", false)
+                isCancelled   = s.optBoolean("isCancelled", false),
+                cancelReason  = s.optString("cancelReason").let { if (it == "null") "" else it },
+                hasAlert      = s.optBoolean("isCancelled", false)
             ))
         }
         return result
@@ -282,11 +439,24 @@ class ServerApiClient {
         return response.body?.string()?.let { JSONObject(it) }
     }
 
-    /** Like [get] but returns the raw response body string, allowing callers to decide
-     *  whether the root is a JSON object or array before parsing. */
     private fun getRaw(path: String): String? {
         val response = http.newCall(Request.Builder().url("$baseUrl$path").build()).execute()
         if (!response.isSuccessful) return null
+        return response.body?.string()?.trim()
+    }
+
+    private fun postRaw(path: String, bodyJson: String): String? {
+        val mediaType = "application/json; charset=utf-8".toMediaType()
+        val request = Request.Builder()
+            .url("$baseUrl$path")
+            .post(bodyJson.toRequestBody(mediaType))
+            .addHeader("Content-Type", "application/json")
+            .build()
+        val response = http.newCall(request).execute()
+        if (!response.isSuccessful) {
+            Log.w(TAG, "POST $path → HTTP ${response.code}")
+            return null
+        }
         return response.body?.string()?.trim()
     }
 }
@@ -302,7 +472,9 @@ data class ServerService(
     val originCrs: String?, val destCrs: String?,
     val originTiploc: String, val destTiploc: String,
     val actualTime: String = "",
-    val isCancelled: Boolean = false
+    val isCancelled: Boolean = false,
+    val cancelReason: String = "",
+    val hasAlert: Boolean = false
 )
 
 data class CallingPointsResult(
@@ -326,4 +498,43 @@ data class AllocationInfo(
     val vehicles: List<String>,
     val unitCount: Int,
     val coachCount: Int
+)
+
+// ─── HSP result models ────────────────────────────────────────────────────────
+
+data class HspServiceMetrics(
+    val rid:             String,
+    val originTiploc:    String,
+    val destTiploc:      String,
+    val scheduledDep:    String,
+    val scheduledArr:    String,
+    val tocCode:         String,
+    val matchedServices: Int,
+    val onTime:          Int,
+    val total:           Int,
+    val punctualityPct:  Int   // -1 = no data; 0-100 = % on time
+)
+
+data class HspMetricsResult(
+    val services: List<HspServiceMetrics>
+)
+
+data class HspLocationResult(
+    val tiploc:       String,
+    val scheduledDep: String,
+    val scheduledArr: String,
+    val actualDep:    String,
+    val actualArr:    String,
+    val cancelReason: String
+)
+
+data class HspDetailsResult(
+    val rid:       String,
+    val date:      String,
+    val tocCode:   String,
+    val unit:      String = "",
+    val units:     List<String> = emptyList(),
+    val vehicles:  List<String> = emptyList(),
+    val unitCount: Int = 0,
+    val locations: List<HspLocationResult>
 )
