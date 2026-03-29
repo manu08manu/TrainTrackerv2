@@ -11,3 +11,5 @@ local.properties
 
 # Ignore secrets
 Constants.kt
+.gradle/
+.idea/
