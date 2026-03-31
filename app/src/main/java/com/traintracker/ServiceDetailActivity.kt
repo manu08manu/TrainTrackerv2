@@ -34,9 +34,7 @@ class ServiceDetailActivity : AppCompatActivity() {
     // ── TIPLOC name resolver ─────────────────────────────────────────────────
     /** Converts a raw TIPLOC (e.g. "WDONPDS") to a readable name via CORPUS NLCDESC. */
     private fun resolveLocationName(raw: String): String =
-        if (raw.matches(Regex("[A-Z0-9]{4,7}")))
-            CorpusData.nameFromTiploc(raw) ?: raw
-        else raw
+        raw
 
     companion object {
         private const val EXTRA_SERVICE_ID = "service_id"

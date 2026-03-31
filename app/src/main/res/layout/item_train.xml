@@ -260,6 +260,36 @@
                 android:layout_marginTop="3dp"
                 android:visibility="gone"/>
 
+            <!-- ── Row 4: Split/coupling info (unit board only) ─────────── -->
+            <TextView
+                android:id="@+id/tvSplitInfo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="10sp"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:layout_marginTop="3dp"
+                android:drawablePadding="4dp"
+                android:visibility="gone"/>
+
+            <!-- ── Row 5: Forms next service (unit board only) ─────────────── -->
+            <TextView
+                android:id="@+id/tvFormsNext"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="10sp"
+                android:textColor="#FF1565C0"
+                android:layout_marginTop="3dp"
+                android:visibility="gone"/>
+            <!-- ── Row 6: Unit formation (unit board only) ──────────────── -->
+            <TextView
+                android:id="@+id/tvUnitFormation"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="10sp"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:layout_marginTop="2dp"
+                android:visibility="gone"/>
+
         </LinearLayout>
     </LinearLayout>
 </androidx.cardview.widget.CardView>

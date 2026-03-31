@@ -13,7 +13,6 @@ class TrainTrackerApp : Application() {
     override fun onCreate() {
         super.onCreate()
         appScope.launch {
-            launch(Dispatchers.IO) { CorpusData.init(this@TrainTrackerApp) }
             launch(Dispatchers.IO) { StationData.init(this@TrainTrackerApp) }
         }
     }

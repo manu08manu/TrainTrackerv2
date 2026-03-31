@@ -285,7 +285,46 @@ class TrainAdapter(
                 else                            -> 1f
             }
 
-            // ── Click / long-press ────────────────────────────────────────────
+            // ── Unit formation + split/coupling info ─────────────────────────────
+            if (s.units.isNotEmpty()) {
+                b.tvUnitFormation.text = s.units.joinToString(" + ")
+                b.tvUnitFormation.visibility = View.VISIBLE
+            } else {
+                b.tvUnitFormation.visibility = View.GONE
+            }
+
+            // Split info
+            val splitLine = if (s.splitToHeadcode.isNotEmpty()) {
+                val at = s.splitTiplocName.ifEmpty { s.splitTiploc }.ifEmpty { "?" }
+                "✂ Splits at $at → ${s.splitToHeadcode}"
+            } else ""
+            b.tvSplitInfo.text       = splitLine
+            b.tvSplitInfo.visibility = if (splitLine.isNotEmpty()) View.VISIBLE else View.GONE
+
+            // Forms next service
+            val formsLine = if (s.formsHeadcode.isNotEmpty()) "→ Forms ${s.formsHeadcode}" else ""
+            b.tvFormsNext.text       = formsLine
+            b.tvFormsNext.visibility = if (formsLine.isNotEmpty()) View.VISIBLE else View.GONE
+            b.tvFormsNext.setOnClickListener {
+                if (s.formsUid.isNotEmpty()) {
+                    val intent = android.content.Intent(ctx, ServiceDetailActivity::class.java).apply {
+                        putExtra("serviceId", s.formsUid)
+                        putExtra("headcode", s.formsHeadcode)
+                    }
+                    ctx.startActivity(intent)
+                }
+            }
+            b.tvFormsNext.setOnLongClickListener {
+                if (s.formsHeadcode.isNotEmpty()) {
+                    val intent = android.content.Intent(ctx, StationBoardActivity::class.java).apply {
+                        putExtra("headcode", s.formsHeadcode)
+                    }
+                    ctx.startActivity(intent)
+                }
+                true
+            }
+
+            // ── Click / long-press ────────────────────────────────────────────────
             b.root.isClickable = true
             b.root.isFocusable = false
             b.root.setOnClickListener { onServiceClick(s) }

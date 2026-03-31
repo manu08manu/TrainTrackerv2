@@ -86,12 +86,10 @@ class HspViewModel : ViewModel() {
                         }
 
                         val rows = event.services.map { s ->
-                            val originCrs  = CorpusData.crsFromTiploc(s.originTiploc) ?: s.originTiploc
-                            val destCrs    = CorpusData.crsFromTiploc(s.destTiploc)   ?: s.destTiploc
-                            val originName = StationData.findByCrs(originCrs)?.name
-                                ?: CorpusData.nameFromTiploc(s.originTiploc) ?: originCrs
-                            val destName   = StationData.findByCrs(destCrs)?.name
-                                ?: CorpusData.nameFromTiploc(s.destTiploc) ?: destCrs
+                            val originCrs  = s.originTiploc
+                            val destCrs    = s.destTiploc
+                            val originName = StationData.findByCrs(originCrs)?.name ?: originCrs
+                            val destName   = StationData.findByCrs(destCrs)?.name ?: destCrs
                             val tocName    = TocData.get(s.tocCode)?.name ?: s.tocCode
                             HspServiceRow(
                                 rid            = s.rid,
@@ -142,9 +140,8 @@ class HspViewModel : ViewModel() {
                     }
                 }
                 val rows = result.locations.map { loc ->
-                    val crs  = CorpusData.crsFromTiploc(loc.tiploc) ?: loc.tiploc
-                    val name = StationData.findByCrs(crs)?.name
-                        ?: CorpusData.nameFromTiploc(loc.tiploc) ?: loc.tiploc
+                    val crs  = loc.crs.ifEmpty { loc.tiploc }
+                    val name = StationData.findByCrs(loc.crs)?.name ?: loc.name.ifEmpty { loc.tiploc }
                     val sched  = loc.scheduledDep.ifEmpty { loc.scheduledArr }
                     val actual = loc.actualDep.ifEmpty { loc.actualArr }
                     val status = when {
@@ -344,8 +341,7 @@ class HspActivity : AppCompatActivity() {
                         when (state) {
                             is HspState.Idle -> {
                                 binding.progressBar.visibility = View.GONE
-                                binding.tvStatus.visibility    = View.GONE
-                                binding.tvSummary.visibility   = View.GONE
+                                // Don't clear results or summary on Idle — preserve last search
                             }
                             is HspState.Loading -> {
                                 binding.progressBar.visibility = View.VISIBLE
@@ -372,7 +368,7 @@ class HspActivity : AppCompatActivity() {
                             is HspState.Success -> {
                                 binding.progressBar.visibility = View.GONE
                                 binding.tvStatus.visibility    = View.GONE
-                                binding.tvSummary.text         = "${state.results.size} services · ${formatHistoricDate(selectedDate)}"
+                                binding.tvSummary.text         = "${state.results.size} services"
                                 binding.tvSummary.visibility   = View.VISIBLE
                                 resultsAdapter.submitList(state.results)
                             }

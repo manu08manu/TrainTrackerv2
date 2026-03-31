@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Service header row — sticky-style band between calling point blocks -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <!-- Gap / connector from previous service (contains stabling or split annotation) -->
+    <LinearLayout
+        android:id="@+id/interServiceGap"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:minHeight="20dp"
+        android:gravity="center_vertical"
+        android:visibility="gone">
+
+        <!-- Timeline spine continuing down -->
+        <View
+            android:layout_width="36dp"
+            android:layout_height="match_parent"
+            android:gravity="center_horizontal"/>
+
+        <TextView
+            android:id="@+id/tvGapLabel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="10sp"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textStyle="italic"
+            android:paddingHorizontal="4dp"
+            android:paddingVertical="6dp"/>
+
+    </LinearLayout>
+
+    <!-- The actual service header band -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingVertical="8dp"
+        android:paddingHorizontal="4dp"
+        android:background="?attr/colorSurfaceVariant">
+
+        <!-- Coloured status bar on left edge -->
+        <View
+            android:id="@+id/statusBar"
+            android:layout_width="4dp"
+            android:layout_height="32dp"
+            android:layout_marginEnd="8dp"
+            android:background="@color/status_ontime"/>
+
+        <!-- Headcode (monospace) -->
+        <TextView
+            android:id="@+id/tvHeadcode"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace"
+            android:textColor="?attr/colorOnSurface"
+            android:minWidth="52dp"/>
+
+        <!-- Origin → Dest -->
+        <TextView
+            android:id="@+id/tvRoute"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textSize="13sp"
+            android:textColor="?attr/colorOnSurface"
+            android:paddingHorizontal="8dp"
+            android:maxLines="1"
+            android:ellipsize="end"/>
+
+        <!-- Formation (e.g. 375820 + 375919) -->
+        <TextView
+            android:id="@+id/tvFormation"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="10sp"
+            android:fontFamily="monospace"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:paddingEnd="6dp"
+            android:visibility="gone"/>
+
+        <!-- Status chip (On time / +Xm / Cancelled) -->
+        <TextView
+            android:id="@+id/tvStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:textColor="@color/white"
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="2dp"
+            android:background="@drawable/bg_toc_badge"
+            android:layout_marginEnd="4dp"/>
+
+    </LinearLayout>
+
+    <!-- Split annotation bar (only shown if this service splits) -->
+    <LinearLayout
+        android:id="@+id/splitBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="4dp"
+        android:background="#1A1565C0"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tvSplitInfo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="11sp"
+            android:textColor="#FF1565C0"/>
+
+    </LinearLayout>
+
+</LinearLayout>

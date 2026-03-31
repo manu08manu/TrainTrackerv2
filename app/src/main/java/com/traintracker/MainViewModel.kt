@@ -208,12 +208,10 @@ class MainViewModel : ViewModel() {
 
         // Convert HspServiceMetrics → TrainService so the existing board UI works unchanged
         val services = result.services.mapNotNull { s ->
-            val originCrs  = CorpusData.crsFromTiploc(s.originTiploc) ?: s.originTiploc
-            val destCrs    = CorpusData.crsFromTiploc(s.destTiploc)   ?: s.destTiploc
-            val originName = StationData.findByCrs(originCrs)?.name
-                ?: CorpusData.nameFromTiploc(s.originTiploc) ?: originCrs
-            val destName   = StationData.findByCrs(destCrs)?.name
-                ?: CorpusData.nameFromTiploc(s.destTiploc) ?: destCrs
+            val originCrs  = s.originTiploc
+            val destCrs    = s.destTiploc
+            val originName = StationData.findByCrs(originCrs)?.name ?: originCrs
+            val destName   = StationData.findByCrs(destCrs)?.name ?: destCrs
             val operator   = TocData.get(s.tocCode)?.name ?: ""
 
             TrainService(
@@ -344,13 +342,8 @@ class MainViewModel : ViewModel() {
         val h            = s.headcode.uppercase()
         val operatorName = TocData.get(s.atocCode)?.name ?: ""
 
-        val originName = s.originCrs?.let { StationData.findByCrs(it)?.name ?: CorpusData.nameFromTiploc(it) }
-            ?: CorpusData.nameFromTiploc(s.originTiploc)
-            ?: s.originCrs ?: ""
-
-        val destName = s.destCrs?.let { StationData.findByCrs(it)?.name ?: CorpusData.nameFromTiploc(it) }
-            ?: CorpusData.nameFromTiploc(s.destTiploc)
-            ?: s.destCrs ?: ""
+        val originName = s.originCrs?.let { StationData.findByCrs(it)?.name } ?: s.originCrs ?: ""
+        val destName   = s.destCrs?.let { StationData.findByCrs(it)?.name } ?: s.destCrs ?: ""
 
         val formation    = formationCache.get(h.uppercase()) ?: formationCache.get(s.uid.uppercase())
         val units        = formation?.units ?: existing?.units ?: emptyList()
@@ -400,8 +393,16 @@ class MainViewModel : ViewModel() {
             unitAllocation   = if (units.isNotEmpty())
                 RollingStockData.toUnitAllocation(units, coaches)
             else RollingStockData.toUnitAllocation(listOf(h)),
-            tourName         = RailTourData.tourNameFor(h, s.uid, s.atocCode),
-            hasAlert         = s.hasAlert || s.isCancelled || existing?.hasAlert ?: false
+            tourName             = RailTourData.tourNameFor(h, s.uid, s.atocCode),
+            hasAlert             = s.hasAlert || s.isCancelled || existing?.hasAlert ?: false,
+            splitTiploc          = s.splitTiploc,
+            splitTiplocName      = s.splitTiplocName,
+            splitToHeadcode      = s.splitToHeadcode,
+            couplingTiploc       = s.couplingTiploc,
+            couplingTiplocName   = s.couplingTiplocName,
+            coupledFromHeadcode  = s.coupledFromHeadcode,
+            formsUid             = s.formsUid,
+            formsHeadcode        = s.formsHeadcode
         )
     }
 
@@ -434,10 +435,18 @@ class MainViewModel : ViewModel() {
     ) {
         if (!server.isEnabled) { onNotFound(); return }
         viewModelScope.launch {
-            val crs = try {
+            // Try TRUST live location first
+            val trustCrs = try {
                 server.findHeadcodeStation(headcode.uppercase())
             } catch (_: Exception) { null }
-            if (!crs.isNullOrEmpty()) onFound(crs) else onNotFound()
+            if (!trustCrs.isNullOrEmpty()) { onFound(trustCrs); return@launch }
+
+            // Fall back to headcode board — use the origin CRS of the first service
+            val services = try {
+                server.getHeadcodeBoard(headcode.uppercase())
+            } catch (_: Exception) { null }
+            val fallbackCrs = services?.firstOrNull()?.originCrs
+            if (!fallbackCrs.isNullOrEmpty()) onFound(fallbackCrs) else onNotFound()
         }
     }
 
@@ -521,10 +530,8 @@ class MainViewModel : ViewModel() {
                 val hspResult = server.getHspDetails(uid) // uid is the RID in historic mode
                 if (hspResult != null) {
                     val callingPoints = hspResult.locations.map { loc ->
-                        val crs  = CorpusData.crsFromTiploc(loc.tiploc) ?: ""
-                        val name = crs.let { StationData.findByCrs(it)?.name }
-                            ?: CorpusData.nameFromTiploc(loc.tiploc)
-                            ?: loc.tiploc
+                        val crs  = loc.crs
+                        val name = StationData.findByCrs(crs)?.name ?: loc.name.ifEmpty { loc.tiploc }
                         val actualTime = loc.actualDep.ifEmpty { loc.actualArr }
                         val schedTime  = loc.scheduledDep.ifEmpty { loc.scheduledArr }
                         val etDisplay  = when {
@@ -621,7 +628,7 @@ class MainViewModel : ViewModel() {
     // ── HSP punctuality (via server) ──────────────────────────────────────────
 
     fun fetchHspForDetail(headcode: String, fromCrs: String, toCrs: String) {
-        if (!server.isEnabled || headcode.isEmpty() || fromCrs.isEmpty()) return
+        if (!server.isEnabled || headcode.isEmpty() || fromCrs.isEmpty() || toCrs.isEmpty()) return
         val cacheKey = "$headcode-$fromCrs-$toCrs"
         hspCache.get(cacheKey)?.let { _hspSummary.value = it; return }
         viewModelScope.launch {
@@ -832,8 +839,8 @@ class MainViewModel : ViewModel() {
         val u = unit.uppercase().trim()
         _unitBoard.value = UiState.Loading
         viewModelScope.launch {
-            val services = try { server.getUnitBoard(u) } catch (_: Exception) { emptyList() }
-            if (services == null) {
+            val services = try { server.getUnitBoard(u) } catch (_: Exception) { null }
+            if (services == null || services.isEmpty()) {
                 _unitBoard.value = null
                 onNotFound()
                 return@launch
@@ -863,7 +870,7 @@ class MainViewModel : ViewModel() {
 
     fun clearHeadcodeBoard() {
         _headcodeBoard.value = null
-        _unitBoard.value = null
+        // Do not clear _unitBoard here
     }
 
     fun fetchHeadcodeBoard(headcode: String, onNotFound: () -> Unit) {

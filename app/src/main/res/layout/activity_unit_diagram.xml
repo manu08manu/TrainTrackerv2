@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="?attr/colorSurface">
+
+    <!-- Toolbar -->
+    <androidx.appcompat.widget.Toolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorPrimary"
+        android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"/>
+
+    <!-- Column headers -->
+    <LinearLayout
+        android:id="@+id/headerRow"
+        android:layout_width="match_parent"
+        android:layout_height="32dp"
+        android:orientation="horizontal"
+        android:background="?attr/colorSurfaceVariant"
+        android:paddingHorizontal="4dp"
+        android:gravity="center_vertical">
+
+        <!-- Timeline column spacer -->
+        <View
+            android:layout_width="36dp"
+            android:layout_height="match_parent"/>
+
+        <TextView
+            android:layout_width="44dp"
+            android:layout_height="wrap_content"
+            android:text="CRS"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:textColor="?attr/colorOnSurfaceVariant"/>
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Station"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:textColor="?attr/colorOnSurfaceVariant"/>
+
+        <TextView
+            android:layout_width="32dp"
+            android:layout_height="wrap_content"
+            android:text="Plt"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:gravity="center"/>
+
+        <TextView
+            android:layout_width="42dp"
+            android:layout_height="wrap_content"
+            android:text="Sched"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:gravity="center"/>
+
+        <TextView
+            android:layout_width="42dp"
+            android:layout_height="wrap_content"
+            android:text="Actual"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:gravity="center"/>
+
+        <TextView
+            android:layout_width="36dp"
+            android:layout_height="wrap_content"
+            android:text="Delay"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:gravity="center"/>
+
+    </LinearLayout>
+
+    <ProgressBar
+        android:id="@+id/progressBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_margin="32dp"
+        android:visibility="gone"/>
+
+    <TextView
+        android:id="@+id/tvError"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="16dp"
+        android:textSize="14sp"
+        android:textColor="@color/status_cancelled"
+        android:visibility="gone"/>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:paddingBottom="16dp"/>
+
+</LinearLayout>

@@ -226,7 +226,16 @@ data class TrainService(
     val tourName: String = "",
 
     // True for passenger services that pass through this station without stopping
-    val isServicePassing: Boolean = false
+    val isServicePassing: Boolean = false,
+    // Unit board: split/coupling data
+    val splitTiploc: String = "",
+    val splitTiplocName: String = "",
+    val splitToHeadcode: String = "",
+    val couplingTiploc: String = "",
+    val couplingTiplocName: String = "",
+    val coupledFromHeadcode: String = "",
+    val formsUid: String = "",
+    val formsHeadcode: String = ""
 ) {
     val isArrival: Boolean get() = boardType == BoardType.ARRIVALS
     val scheduledTime: String get() = if (isArrival) sta else std

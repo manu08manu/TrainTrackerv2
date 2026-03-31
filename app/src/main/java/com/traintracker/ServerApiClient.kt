@@ -40,7 +40,7 @@ class ServerApiClient {
     // 180s to cover worst-case uncached full-day HSP queries (4 chunks × ~40s each)
     private val sseHttp = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(180, TimeUnit.SECONDS)
+        .readTimeout(360, TimeUnit.SECONDS)
         .build()
 
     // ── HSP progress event ─────────────────────────────────────────────────────
@@ -373,6 +373,8 @@ class ServerApiClient {
                     val l = locs.optJSONObject(i) ?: return@mapNotNull null
                     HspLocationResult(
                         tiploc       = l.optString("tiploc"),
+                        crs          = l.optString("crs"),
+                        name         = l.optString("name"),
                         scheduledDep = l.optString("scheduledDep"),
                         scheduledArr = l.optString("scheduledArr"),
                         actualDep    = l.optString("actualDep"),
@@ -433,7 +435,15 @@ class ServerApiClient {
                 hasAlert       = s.optBoolean("isCancelled", false),
                 units          = units,
                 vehicles       = vehicles,
-                unitJoinTiploc = s.safeString("unitJoinTiploc").ifEmpty { null }
+                unitJoinTiploc     = s.safeString("unitJoinTiploc").ifEmpty { null },
+                splitTiploc        = s.safeString("splitTiploc"),
+                splitTiplocName    = s.safeString("splitTiplocName"),
+                splitToHeadcode    = s.safeString("splitToHeadcode"),
+                couplingTiploc     = s.safeString("couplingTiploc"),
+                couplingTiplocName = s.safeString("couplingTiplocName"),
+                coupledFromHeadcode = s.safeString("coupledFromHeadcode"),
+                formsUid            = s.safeString("formsUid"),
+                formsHeadcode       = s.safeString("formsHeadcode")
             ))
         }
         return result
@@ -448,7 +458,7 @@ class ServerApiClient {
             val crs    = cp.safeString("crs").ifEmpty { null }
             result.add(CallingPoint(
                 locationName = crs?.let { StationData.findByCrs(it)?.name }
-                    ?: CorpusData.nameFromTiploc(tiploc) ?: tiploc,
+                    ?: tiploc,
                 crs          = crs ?: "",
                 st           = cp.optString("scheduledTime"),
                 et           = cp.safeString("actualTime"),
@@ -506,7 +516,15 @@ data class ServerService(
     val hasAlert: Boolean = false,
     val units: List<String> = emptyList(),
     val vehicles: List<String> = emptyList(),
-    val unitJoinTiploc: String? = null
+    val unitJoinTiploc: String? = null,
+    val splitTiploc: String = "",
+    val splitTiplocName: String = "",
+    val splitToHeadcode: String = "",
+    val couplingTiploc: String = "",
+    val couplingTiplocName: String = "",
+    val coupledFromHeadcode: String = "",
+    val formsUid: String = "",
+    val formsHeadcode: String = ""
 )
 
 data class CallingPointsResult(
@@ -547,6 +565,8 @@ data class HspMetricsResult(
 
 data class HspLocationResult(
     val tiploc:       String,
+    val crs:          String,
+    val name:         String,
     val scheduledDep: String,
     val scheduledArr: String,
     val actualDep:    String,

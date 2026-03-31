@@ -311,9 +311,22 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:paddingStart="4dp"
-                android:paddingEnd="10dp"
+                android:paddingEnd="4dp"
                 android:textSize="11sp"
                 android:textStyle="bold"
+                android:visibility="gone"/>
+
+            <!-- Diagram button — visible only on unit board -->
+            <TextView
+                android:id="@+id/btnDiagram"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📋"
+                android:textSize="18sp"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="6dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="View diagram"
                 android:visibility="gone"/>
 
         </LinearLayout>

@@ -48,6 +48,10 @@ class MainActivity : AppCompatActivity() {
     private var currentBoardType = BoardType.DEPARTURES
     private var currentCrs       = ""
 
+    private enum class SearchMode { STATION, HEADCODE, UNIT }
+    private var currentSearchMode = SearchMode.STATION
+    private var currentUnit = ""
+
     // ─── Permission launchers ──────────────────────────────────────────────────
     private val locationPermissionRequest = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -80,6 +84,7 @@ class MainActivity : AppCompatActivity() {
         setupFavouriteChips()
         observeUiState()
         observeUnitBoard()
+        observeHeadcodeBoard()
         observeFilterState()
         observeDarwinState()
         observeIncidents()
@@ -130,7 +135,15 @@ class MainActivity : AppCompatActivity() {
         )
         binding.rvTrains.layoutManager = LinearLayoutManager(this)
         binding.rvTrains.adapter = adapter
-        binding.swipeRefresh.setOnRefreshListener { viewModel.refresh() }
+        binding.swipeRefresh.setOnRefreshListener {
+            when (currentSearchMode) {
+                SearchMode.UNIT -> viewModel.fetchUnitBoard(currentUnit, onNotFound = {
+                    binding.swipeRefresh.isRefreshing = false
+                })
+                SearchMode.HEADCODE -> viewModel.refresh()
+                SearchMode.STATION  -> viewModel.refresh()
+            }
+        }
     }
 
     // ─── Tabs ─────────────────────────────────────────────────────────────────
@@ -390,45 +403,31 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun searchByHeadcode(headcode: String) {
-        if (currentCrs.isNotEmpty()) {
-            // Station already selected — filter the current board directly
-            viewModel.setHeadcodeFilter(headcode)
-            binding.chipCallingAt.text = getString(R.string.filter_headcode, headcode)
-            binding.chipCallingAt.isChecked = true
-            return
-        }
-        // No station selected — try to locate the train globally via the server
+        // Always go to headcode board — clear any existing station context
+        currentSearchMode = SearchMode.HEADCODE
+        currentCrs = ""
+        currentCrs = ""
+        binding.btnDiagram.visibility = View.GONE
         binding.progressBar.visibility = View.VISIBLE
-        viewModel.locateHeadcodeGlobally(
+        viewModel.fetchHeadcodeBoard(
             headcode = headcode,
-            onFound = { crs ->
-                binding.progressBar.visibility = View.GONE
-                val station = StationData.findByCrs(crs)
-                if (station != null) {
-                    selectStation(station)
-                } else {
-                    currentCrs = crs
-                    binding.etCrs.setText(crs)
-                    updateFavouriteButton()
-                    saveAndSearch()
-                }
-                viewModel.setHeadcodeFilter(headcode)
-                binding.chipCallingAt.text = getString(R.string.filter_headcode, headcode)
-                binding.chipCallingAt.isChecked = true
-            },
             onNotFound = {
                 binding.progressBar.visibility = View.GONE
                 AlertDialog.Builder(this)
                     .setTitle("Headcode not found")
-                    .setMessage("$headcode could not be located. It may not be running yet, or the server may not have data for it.\n\nTry selecting a station first to search there.")
+                    .setMessage("$headcode could not be located. It may not be running yet, or the server may not have data for it.")
                     .setPositiveButton("OK", null)
                     .show()
             }
         )
+        binding.chipCallingAt.text = getString(R.string.filter_headcode, headcode)
+        binding.chipCallingAt.isChecked = true
     }
 
 
     private fun searchByUnit(unit: String) {
+        currentSearchMode = SearchMode.UNIT
+        currentUnit = unit.uppercase()
         currentCrs = ""
         binding.etCrs.setText(unit.uppercase())
         binding.progressBar.visibility = View.VISIBLE
@@ -455,7 +454,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun saveAndSearch() {
+        currentSearchMode = SearchMode.STATION
         viewModel.clearHeadcodeBoard()
+        binding.btnDiagram.visibility = View.GONE
         binding.chipCallingAt.text = getString(R.string.filter_calling_at)
         binding.chipCallingAt.isChecked = false
         binding.chipCallingAt.isCloseIconVisible = false
@@ -536,6 +537,7 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.uiState.collect { state ->
+                    if (currentSearchMode == SearchMode.UNIT || currentSearchMode == SearchMode.HEADCODE) return@collect
                     binding.swipeRefresh.isRefreshing = false
                     when (state) {
                         is UiState.Idle -> {
@@ -608,13 +610,21 @@ class MainActivity : AppCompatActivity() {
                             binding.tvError.visibility     = View.GONE
                             binding.emptyState.visibility  = View.GONE
                             binding.tvHeader.visibility    = View.GONE
+                            binding.btnDiagram.visibility  = View.GONE
                             adapter.submitList(emptyList())
                         }
                         is UiState.Success -> {
                             binding.progressBar.visibility = View.GONE
                             binding.tvError.visibility     = View.GONE
                             binding.tvHeader.visibility    = View.VISIBLE
-                            binding.tvHeader.text = "Unit ${state.board.stationName}"
+                            binding.tvHeader.text = state.board.stationName
+                            // Show diagram button and wire it up
+                            binding.btnDiagram.visibility = View.VISIBLE
+                            binding.btnDiagram.setOnClickListener {
+                                val intent = android.content.Intent(this@MainActivity, UnitDiagramActivity::class.java)
+                                intent.putExtra("unit", currentUnit)
+                                startActivity(intent)
+                            }
                             if (state.board.services.isEmpty()) {
                                 binding.emptyState.visibility = View.VISIBLE
                                 binding.tvEmptySubtitle.text = "No services found for this unit today."
@@ -628,6 +638,50 @@ class MainActivity : AppCompatActivity() {
                             binding.progressBar.visibility = View.GONE
                             binding.tvError.text = state.message
                             binding.tvError.visibility = View.VISIBLE
+                            binding.btnDiagram.visibility = View.GONE
+                        }
+                        else -> {
+                            binding.btnDiagram.visibility = View.GONE
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun observeHeadcodeBoard() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.headcodeBoard.collect { state ->
+                    if (state == null) return@collect
+                    if (currentSearchMode != SearchMode.HEADCODE) return@collect
+                    binding.swipeRefresh.isRefreshing = false
+                    when (state) {
+                        is UiState.Loading -> {
+                            binding.progressBar.visibility = View.VISIBLE
+                            binding.tvError.visibility     = View.GONE
+                            binding.emptyState.visibility  = View.GONE
+                            binding.tvHeader.visibility    = View.GONE
+                            adapter.submitList(emptyList())
+                        }
+                        is UiState.Success -> {
+                            binding.progressBar.visibility = View.GONE
+                            binding.tvError.visibility     = View.GONE
+                            binding.tvHeader.visibility    = View.VISIBLE
+                            binding.tvHeader.text          = state.board.stationName
+                            if (state.board.services.isEmpty()) {
+                                binding.emptyState.visibility = View.VISIBLE
+                                binding.tvEmptySubtitle.text  = "No services found for this headcode today."
+                                adapter.submitList(emptyList())
+                            } else {
+                                binding.emptyState.visibility = View.GONE
+                                adapter.submitAll(state.board.services, state.board.stationName)
+                            }
+                        }
+                        is UiState.Error -> {
+                            binding.progressBar.visibility = View.GONE
+                            binding.tvError.text           = state.message
+                            binding.tvError.visibility     = View.VISIBLE
                         }
                         else -> {}
                     }
@@ -635,6 +689,8 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+
+
 
     private fun observeFilterState() {
         lifecycleScope.launch {

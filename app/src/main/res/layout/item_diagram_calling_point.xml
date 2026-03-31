@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Single calling point row — RTT style -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="32dp"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingHorizontal="4dp"
+    android:background="?attr/colorSurface">
+
+    <!-- Timeline column: vertical line + circle node -->
+    <FrameLayout
+        android:layout_width="36dp"
+        android:layout_height="match_parent">
+
+        <!-- Vertical line (top half) -->
+        <View
+            android:id="@+id/lineTop"
+            android:layout_width="2dp"
+            android:layout_height="16dp"
+            android:layout_gravity="top|center_horizontal"
+            android:background="?attr/colorOutline"/>
+
+        <!-- Vertical line (bottom half) -->
+        <View
+            android:id="@+id/lineBottom"
+            android:layout_width="2dp"
+            android:layout_height="16dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="?attr/colorOutline"/>
+
+        <!-- Stop node circle -->
+        <View
+            android:id="@+id/stopNode"
+            android:layout_width="8dp"
+            android:layout_height="8dp"
+            android:layout_gravity="center"
+            android:background="@drawable/bg_toc_badge"/>
+
+    </FrameLayout>
+
+    <!-- CRS code -->
+    <TextView
+        android:id="@+id/tvCrs"
+        android:layout_width="44dp"
+        android:layout_height="wrap_content"
+        android:textSize="11sp"
+        android:fontFamily="monospace"
+        android:textStyle="bold"
+        android:textColor="?attr/colorOnSurface"/>
+
+    <!-- Station name -->
+    <TextView
+        android:id="@+id/tvStationName"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textSize="12sp"
+        android:textColor="?attr/colorOnSurface"
+        android:maxLines="1"
+        android:ellipsize="end"/>
+
+    <!-- Platform -->
+    <TextView
+        android:id="@+id/tvPlatform"
+        android:layout_width="32dp"
+        android:layout_height="wrap_content"
+        android:textSize="11sp"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        android:gravity="center"/>
+
+    <!-- Scheduled time -->
+    <TextView
+        android:id="@+id/tvSched"
+        android:layout_width="42dp"
+        android:layout_height="wrap_content"
+        android:textSize="11sp"
+        android:fontFamily="monospace"
+        android:textColor="?attr/colorOnSurface"
+        android:gravity="center"/>
+
+    <!-- Actual time -->
+    <TextView
+        android:id="@+id/tvActual"
+        android:layout_width="42dp"
+        android:layout_height="wrap_content"
+        android:textSize="11sp"
+        android:fontFamily="monospace"
+        android:gravity="center"/>
+
+    <!-- Delay pill -->
+    <TextView
+        android:id="@+id/tvDelay"
+        android:layout_width="36dp"
+        android:layout_height="wrap_content"
+        android:textSize="10sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:visibility="invisible"/>
+
+</LinearLayout>
