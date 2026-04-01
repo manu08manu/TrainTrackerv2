@@ -521,8 +521,3 @@ data class TrustMovement(
     val delayMinutes: Int = 0
 )
 
-data class TrustActivation(
-    val trainUid: String,
-    val headcode: String,
-    val originDep: String       // scheduled departure time at origin e.g. "0743"
-)

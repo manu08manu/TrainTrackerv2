@@ -316,7 +316,7 @@ class ServiceDetailActivity : AppCompatActivity() {
                     android.util.Log.d("ServiceDetail", "serverAllocation emitted: $info")
                     info ?: return@collect
                     if (viewModel.detailFormation.value != null) {
-                        android.util.Log.d("ServiceDetail", "serverAllocation: skipped — detailFormation already set")
+                        // serverAllocation skipped — detailFormation already set
                         return@collect
                     }
                     android.util.Log.d("ServiceDetail", "serverAllocation: binding units=${info.units} coaches=${info.coachCount}")
@@ -476,12 +476,13 @@ class ServiceDetailActivity : AppCompatActivity() {
                 at = when {
                     arrActual != null -> arrActual
                     depActual != null -> depActual
-                    else              -> pt.at
+                    else              -> ""  // clear server-propagated time — show as estimate instead
                 },
                 et = when {
-                    hasPassed            -> pt.et          // already passed — keep original
-                    estimatedEta != null -> estimatedEta   // TRUST-propagated estimate
-                    else                 -> pt.et          // original board ETA
+                    hasPassed            -> pt.et           // already passed — keep original
+                    estimatedEta != null -> estimatedEta    // TRUST-propagated estimate
+                    pt.at.isNotEmpty()   -> pt.at           // server-propagated delay — shown as ~HH:MM
+                    else                 -> pt.et           // original board ETA
                 },
                 platform    = updatedPlatform ?: pt.platform,
                 isCancelled = isCancelledStop || pt.isCancelled || live.isCancelled
