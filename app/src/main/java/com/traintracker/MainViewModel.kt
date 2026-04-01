@@ -573,9 +573,8 @@ class MainViewModel : ViewModel() {
             val result = if (server.isEnabled) {
                 val serverResult = server.getCallingPoints(uid, atCrs)
                 if (serverResult != null) {
-                    val movements = server.getMovementsForHeadcode(
-                        fallback.trainId.ifEmpty { uid }
-                    )
+                    val serverHasActuals = (serverResult.previous + serverResult.subsequent).any { cp -> cp.at.isNotEmpty() }
+                    val movements: List<TrustMovement> = if (serverHasActuals) emptyList() else server.getMovementsForHeadcode(fallback.trainId.ifEmpty { uid }, uid)
                     val actualsByDep = movements.filter { it.type == "DEPARTURE" }.associateBy { it.crs }
                     val actualsByArr = movements.filter { it.type == "ARRIVAL" }.associateBy { it.crs }
 

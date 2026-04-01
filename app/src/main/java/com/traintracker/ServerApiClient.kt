@@ -123,7 +123,7 @@ class ServerApiClient {
         if (!isEnabled || headcode.isEmpty()) return
         while (true) {
             try {
-                fetchMovements(headcode).forEach { _movements.tryEmit(it) }
+                fetchMovements(headcode, "").forEach { _movements.tryEmit(it) }
                 _connected.tryEmit(true)
             } catch (e: Exception) {
                 Log.w(TAG, "TRUST poll error: ${e.message}")
@@ -227,10 +227,10 @@ class ServerApiClient {
             } catch (e: Exception) { null }
         }
 
-    suspend fun getMovementsForHeadcode(headcode: String): List<TrustMovement> =
+    suspend fun getMovementsForHeadcode(headcode: String, uid: String = ""): List<TrustMovement> =
         withContext(Dispatchers.IO) {
             try {
-                fetchMovements(headcode)
+                fetchMovements(headcode, uid)
             } catch (e: Exception) {
                 Log.w(TAG, "getMovements error: \${e.message}"); emptyList()
             }
@@ -389,8 +389,8 @@ class ServerApiClient {
         }
     }
 
-    private fun fetchMovements(headcode: String): List<TrustMovement> {
-        val array = get("/api/trust/movements?headcode=$headcode")?.optJSONArray("movements") ?: return emptyList()
+    private fun fetchMovements(headcode: String, uid: String = ""): List<TrustMovement> {
+        val array = get("/api/trust/movements?headcode=$headcode${if (uid.isNotEmpty()) "&uid=$uid" else ""}")?.optJSONArray("movements") ?: return emptyList()
         val result = mutableListOf<TrustMovement>()
         for (i in 0 until array.length()) {
             val m = array.getJSONObject(i)
