@@ -239,7 +239,8 @@ class ServerApiClient {
     suspend fun getAllocation(headcode: String, date: String, uid: String = ""): AllocationInfo? =
         withContext(Dispatchers.IO) {
             try {
-                val url = "/api/allocation/$headcode?date=$date"
+                // Prefer UID endpoint — queries both current and history tables precisely
+                val url = if (uid.isNotEmpty()) "/api/allocation/uid/$uid" else "/api/allocation/$headcode?date=$date"
                 Log.d(TAG, "getAllocation: fetching $baseUrl$url (uid=$uid)")
 
                 val raw = getRaw(url)

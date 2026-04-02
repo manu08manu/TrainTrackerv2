@@ -535,7 +535,7 @@ class MainViewModel : ViewModel() {
                         val actualTime = loc.actualDep.ifEmpty { loc.actualArr }
                         val schedTime  = loc.scheduledDep.ifEmpty { loc.scheduledArr }
                         val etDisplay  = when {
-                            loc.cancelReason.isNotBlank() -> "Cancelled"
+                            loc.actualDep.isEmpty() && loc.actualArr.isEmpty() && loc.scheduledDep.isNotEmpty() -> "Cancelled"
                             actualTime.isNotEmpty()       -> actualTime
                             else                          -> ""
                         }
@@ -545,7 +545,7 @@ class MainViewModel : ViewModel() {
                             st           = schedTime,
                             et           = etDisplay,
                             at           = actualTime,
-                            isCancelled  = loc.cancelReason.isNotBlank(),
+                            isCancelled  = loc.actualDep.isEmpty() && loc.actualArr.isEmpty() && loc.scheduledDep.isNotEmpty(),
                             length       = null,
                             platform     = "",
                             isPassing    = loc.scheduledDep.isEmpty() && loc.scheduledArr.isEmpty()
