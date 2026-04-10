@@ -98,7 +98,8 @@ class ServerApiClient {
                     matchedServices = s.optInt("matchedServices"),
                     onTime          = s.optInt("onTime"),
                     total           = s.optInt("total"),
-                    punctualityPct  = s.optInt("punctualityPct", -1)
+                    punctualityPct  = s.optInt("punctualityPct", -1),
+                    originCrs       = s.optString("originCrs")
                 )
             }
             emit(HspProgressEvent(100, services, done = true))
@@ -349,11 +350,15 @@ class ServerApiClient {
         }
     }
 
-    suspend fun getHspDetails(rid: String, scheduledDep: String = ""): HspDetailsResult? = withContext(Dispatchers.IO) {
+    suspend fun getHspDetails(rid: String, scheduledDep: String = "", originCrs: String = "", scheduledArr: String = "", destTiploc: String = ""): HspDetailsResult? = withContext(Dispatchers.IO) {
         try {
             val body = org.json.JSONObject().apply {
                 put("rid", rid)
                 if (scheduledDep.isNotEmpty()) put("scheduled_dep", scheduledDep)
+                if (originCrs.isNotEmpty()) put("origin_crs", originCrs)
+                if (scheduledArr.isNotEmpty()) put("scheduled_arr", scheduledArr)
+                if (destTiploc.isNotEmpty()) put("dest_tiploc", destTiploc)
+                
             }
             val raw  = postRaw("/api/hsp/details", body.toString()) ?: return@withContext null
             val json = org.json.JSONObject(raw)
@@ -557,7 +562,8 @@ data class HspServiceMetrics(
     val matchedServices: Int,
     val onTime:          Int,
     val total:           Int,
-    val punctualityPct:  Int   // -1 = no data; 0-100 = % on time
+    val punctualityPct:  Int,  // -1 = no data; 0-100 = % on time
+    val originCrs:       String = ""
 )
 
 data class HspMetricsResult(

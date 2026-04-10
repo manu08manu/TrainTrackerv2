@@ -50,7 +50,9 @@ data class HspServiceRow(
     val destName:      String,
     val tocName:       String,
     val punctualityPct: Int,   // -1 = no data
-    val total:         Int
+    val total:         Int,
+    val originCrs:     String = "",
+    val destTiploc:    String = ""
 )
 
 class HspViewModel : ViewModel() {
@@ -94,12 +96,14 @@ class HspViewModel : ViewModel() {
                             HspServiceRow(
                                 rid            = s.rid,
                                 scheduledDep   = s.scheduledDep,
+                                originCrs      = s.originCrs,
                                 scheduledArr   = s.scheduledArr,
                                 originName     = originName,
                                 destName       = destName,
                                 tocName        = tocName,
                                 punctualityPct = s.punctualityPct,
-                                total          = s.total
+                                total          = s.total,
+                                destTiploc     = s.destTiploc
                             )
                         }.sortedBy { it.scheduledDep.ifEmpty { it.scheduledArr } }
 
@@ -121,11 +125,11 @@ class HspViewModel : ViewModel() {
 
     fun retry() = search(lastFromCrs, lastToCrs, lastDate)
 
-    fun loadDetails(rid: String, scheduledDep: String = "") {
+    fun loadDetails(rid: String, scheduledDep: String = "", originCrs: String = "", scheduledArr: String = "", destTiploc: String = "") {
         _detailState.value = HspState.Loading
         viewModelScope.launch {
             try {
-                val result = withContext(Dispatchers.IO) { server.getHspDetails(rid, scheduledDep) }
+                val result = withContext(Dispatchers.IO) { server.getHspDetails(rid, scheduledDep, originCrs, scheduledArr, destTiploc) }
                 if (result == null) {
                     _detailState.value = HspState.Error("Could not load service details")
                     return@launch
@@ -315,7 +319,7 @@ class HspActivity : AppCompatActivity() {
 
     private fun setupResults() {
         resultsAdapter = HspResultsAdapter { row ->
-            viewModel.loadDetails(row.rid, row.scheduledDep)
+            viewModel.loadDetails(row.rid, row.scheduledDep, row.originCrs, row.scheduledArr, row.destTiploc)
         }
         binding.rvResults.layoutManager = LinearLayoutManager(this)
         binding.rvResults.addItemDecoration(DividerItemDecoration(this, DividerItemDecoration.VERTICAL))
