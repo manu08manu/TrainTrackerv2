@@ -205,8 +205,8 @@ class UnitDiagramAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
             // ── Actual time ────────────────────────────────────────────────
             val actualRaw = if (cp.at.isNotEmpty() && cp.at != "On time") cp.at
-                            else if (cp.et.isNotEmpty() && cp.et != "On time") cp.et
-                            else ""
+            else if (cp.et.isNotEmpty() && cp.et != "On time") cp.et
+            else ""
             val actualFormatted = formatTimeFromIso(actualRaw).ifEmpty { actualRaw.take(5) }
 
             if (actualFormatted.isNotEmpty()) {

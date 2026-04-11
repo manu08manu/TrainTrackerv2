@@ -8,7 +8,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
@@ -44,7 +43,7 @@ data class DetailLiveState(
 
 class MainViewModel : ViewModel() {
 
-    private val kb     = KnowledgebaseService()
+    // KB calls proxied via server
     private val server = ServerApiClient()
 
     private val _uiState     = MutableStateFlow<UiState>(UiState.Idle)
@@ -134,6 +133,10 @@ class MainViewModel : ViewModel() {
     private val formationCache    = LruCache<String, DarwinFormation>(50)
     private val headcodeFromTrust = HashMap<String, String>()
     private val hspCache          = LruCache<String, HspSummary>(100)
+
+    private var incidentsFetchedAt = 0L
+    private var nsiFetchedAt       = 0L
+    private val KB_TTL_MS          = 5 * 60 * 1000L  // 5 minutes
 
     init {
         viewModelScope.launch {
@@ -348,11 +351,8 @@ class MainViewModel : ViewModel() {
         val formation    = formationCache.get(h.uppercase()) ?: formationCache.get(s.uid.uppercase())
         val units        = formation?.units ?: existing?.units ?: emptyList()
         val coaches      = formation?.coachCount ?: existing?.darwinCoachCount ?: 0
-
-        val actualDep = if (bType != BoardType.ARRIVALS && s.actualTime.isNotEmpty())
-            s.actualTime else existing?.actualDeparture ?: ""
-        val actualArr = if (bType == BoardType.ARRIVALS && s.actualTime.isNotEmpty())
-            s.actualTime else existing?.actualArrival ?: ""
+        val actualDep = if (bType != BoardType.ARRIVALS && s.actualTime.isNotEmpty()) s.actualTime else ""
+        val actualArr = if (bType == BoardType.ARRIVALS && s.actualTime.isNotEmpty()) s.actualTime else ""
         val etd = when {
             bType == BoardType.ARRIVALS -> existing?.etd ?: "On time"
             s.actualTime.isNotEmpty()   -> s.actualTime
@@ -465,8 +465,13 @@ class MainViewModel : ViewModel() {
     // ── KB Incidents ──────────────────────────────────────────────────────────
 
     fun fetchIncidents() {
+        val now = System.currentTimeMillis()
+        if (now - incidentsFetchedAt < KB_TTL_MS) return
         viewModelScope.launch {
-            try { _incidents.value = withContext(Dispatchers.IO) { kb.getIncidents() } } catch (_: Exception) {}
+            try {
+                _incidents.value = withContext(Dispatchers.IO) { server.getKbIncidents() }
+                incidentsFetchedAt = System.currentTimeMillis()
+            } catch (_: Exception) {}
         }
     }
     // ── KB NSI ────────────────────────────────────────────────────────────────
@@ -474,7 +479,7 @@ class MainViewModel : ViewModel() {
     private fun fetchTocDetails() {
         if (_tocDetails.value.isNotEmpty()) return
         viewModelScope.launch(Dispatchers.IO) {
-            val list = kb.getToc()
+            val list = withContext(Dispatchers.IO) { server.getKbToc() }
             if (list.isNotEmpty()) {
                 _tocDetails.value = list.associateBy { it.code.uppercase() }
                 Log.d("MainViewModel", "TOC details loaded: ${list.size} entries")
@@ -483,9 +488,14 @@ class MainViewModel : ViewModel() {
     }
 
     fun fetchNsi() {
+        val now = System.currentTimeMillis()
+        if (now - nsiFetchedAt < KB_TTL_MS) return
         viewModelScope.launch {
-            try { _nsi.value = withContext(Dispatchers.IO) { kb.getNsi() } } catch (_: Exception) {}
-            try { withContext(Dispatchers.IO) { kb.preloadStations() } } catch (_: Exception) {}
+            try {
+                _nsi.value = withContext(Dispatchers.IO) { server.getKbNsi() }
+                // preloadStations no longer needed — server proxies KB
+                nsiFetchedAt = System.currentTimeMillis()
+            } catch (_: Exception) {}
         }
     }
 
@@ -660,22 +670,16 @@ class MainViewModel : ViewModel() {
 
     fun fetchServerAllocation(headcode: String, date: String, uid: String = "") {
         if (!server.isEnabled || headcode.isEmpty()) {
-            Log.w("MainViewModel", "fetchServerAllocation: skipped — enabled=${server.isEnabled}, headcode='$headcode'")
             return
         }
         if (_detailFormation.value != null) {
-            Log.d("MainViewModel", "fetchServerAllocation: skipped — detailFormation already set")
             return
         }
-        Log.d("MainViewModel", "fetchServerAllocation: requesting headcode=$headcode uid=$uid date=$date")
         viewModelScope.launch {
             try {
                 val info = server.getAllocation(headcode, date, uid)
                 if (info != null) {
-                    Log.d("MainViewModel", "fetchServerAllocation: emitting units=${info.units} coaches=${info.coachCount}")
                     _serverAllocation.value = info
-                } else {
-                    Log.w("MainViewModel", "fetchServerAllocation: got null for $headcode on $date")
                 }
             } catch (e: Exception) {
                 Log.e("MainViewModel", "fetchServerAllocation: ${e.message}", e)

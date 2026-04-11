@@ -45,7 +45,6 @@
     <string name="nsi_dot_description">Service status</string>
     <!-- Disruption banner -->
     <string name="banner_disruption_title">⚠ Disruption reported</string>
-    <string name="banner_more_incidents">+ %1$d more incident(s) — tap to view all</string>
     <!-- Station info screen -->
     <string name="info_tickets">Tickets</string>
     <string name="info_accessibility">Accessibility</string>
@@ -95,6 +94,18 @@ Performance data not available (set HSP_USERNAME/PASSWORD)
     <string name="live_location_text">%1$s %2$s%3$s</string>
     <string name="label_unit_allocation">Unit allocation</string>
     <string name="label_formation">Formation</string>
-    <string name="coach_count">%d coaches</string>
-    <string name="punctuality_runs">%d runs</string>
+
+    <!-- Plurals -->
+    <plurals name="banner_more_incidents">
+        <item quantity="one">+ %1$d more incident — tap to view all</item>
+        <item quantity="other">+ %1$d more incidents — tap to view all</item>
+    </plurals>
+    <plurals name="coach_count">
+        <item quantity="one">%d coach</item>
+        <item quantity="other">%d coaches</item>
+    </plurals>
+    <plurals name="punctuality_runs">
+        <item quantity="one">%d run</item>
+        <item quantity="other">%d runs</item>
+    </plurals>
 </resources>

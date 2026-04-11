@@ -25,7 +25,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
-import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -107,9 +106,6 @@ class MainActivity : AppCompatActivity() {
 
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-    }
 
     // ─── Adapter ──────────────────────────────────────────────────────────────
     private fun setupAdapter() {
@@ -775,7 +771,7 @@ class MainActivity : AppCompatActivity() {
         binding.tvBannerSummary.text = allMessages.first()
         val extra = allMessages.size - 1
         if (extra > 0) {
-            binding.tvBannerMore.text = getString(R.string.banner_more_incidents, extra)
+            binding.tvBannerMore.text = resources.getQuantityString(R.plurals.banner_more_incidents, extra, extra)
             binding.tvBannerMore.visibility = View.VISIBLE
         } else {
             binding.tvBannerMore.visibility = View.GONE

@@ -1,4 +1,5 @@
 package com.traintracker
+import android.annotation.SuppressLint
 
 import android.content.Context
 import android.content.Intent
@@ -17,6 +18,7 @@ import kotlinx.coroutines.withContext
  *
  * Open by long-pressing a station chip/favourite, or via a dedicated info button.
  */
+@SuppressLint("SetTextI18n")
 class StationInfoActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityStationInfoBinding
@@ -113,3 +115,4 @@ class StationInfoActivity : AppCompatActivity() {
                                  else "🅿 Parking: ${getString(R.string.info_unknown)}"
     }
 }
+

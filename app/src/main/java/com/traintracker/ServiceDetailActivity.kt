@@ -2,7 +2,6 @@ package com.traintracker
 
 import android.content.Context
 import android.content.Intent
-import android.graphics.Color
 import android.os.Bundle
 import android.view.View
 import androidx.activity.viewModels
@@ -101,7 +100,7 @@ class ServiceDetailActivity : AppCompatActivity() {
         val dest         = resolveLocationName(intent.getStringExtra(EXTRA_DEST) ?: "")
         queryCrs         = intent.getStringExtra(EXTRA_QUERY_CRS) ?: ""
         destCrs          = intent.getStringExtra(EXTRA_DEST_CRS)  ?: ""
-        val boardUnits   = intent.getStringArrayListExtra(EXTRA_UNITS) ?: emptyList<String>()
+        val boardUnits   = intent.getStringArrayListExtra(EXTRA_UNITS) ?: emptyList()
         // Cap at 20 — formation data can occasionally have bad values
         val boardCoaches  = intent.getIntExtra(EXTRA_COACHES, 0).takeIf { it in 1..20 } ?: 0
         val boardPlatform = intent.getStringExtra(EXTRA_PLATFORM) ?: ""
@@ -136,7 +135,7 @@ class ServiceDetailActivity : AppCompatActivity() {
         )
         cachedDetails = initialDetails
         rebuildAdapter(initialDetails)
-        bindUnitInfo(boardUnits, boardCoaches, null)
+        bindUnitInfo(boardUnits, boardCoaches)
         viewModel.fetchCifServiceDetails(serviceId, queryCrs, initialDetails)
 
         binding.tvServiceTitle.text = getString(R.string.service_title_route, resolveLocationName(origin), dest)
@@ -282,7 +281,7 @@ class ServiceDetailActivity : AppCompatActivity() {
                     formation ?: return@collect
                     val current = cachedDetails ?: return@collect
                     // Update unit info section with live Darwin data
-                    bindUnitInfo(formation.units, formation.coachCount, null)
+                    bindUnitInfo(formation.units, formation.coachCount)
                     // Update coach count in header if detail already loaded
                     if (current.operator.isNotEmpty()) {
                         bindHeader(current, formation.units, formation.coachCount)
@@ -325,9 +324,9 @@ class ServiceDetailActivity : AppCompatActivity() {
                         return@collect
                     }
                     android.util.Log.d("ServiceDetail", "serverAllocation: binding units=${info.units} coaches=${info.coachCount}")
-                    bindUnitInfo(info.units, info.coachCount, null)
+                    bindUnitInfo(info.units, info.coachCount)
                     val d = cachedDetails
-                    val boardUnits   = intent.getStringArrayListExtra(EXTRA_UNITS) ?: emptyList<String>()
+                    val boardUnits   = intent.getStringArrayListExtra(EXTRA_UNITS) ?: emptyList()
                     val boardCoaches = intent.getIntExtra(EXTRA_COACHES, 0).takeIf { it in 1..20 } ?: 0
                     if (d != null && d.operator.isNotEmpty()) {
                         bindHeader(d, info.units.ifEmpty { boardUnits }, info.coachCount.takeIf { it > 0 } ?: boardCoaches)
@@ -394,11 +393,11 @@ class ServiceDetailActivity : AppCompatActivity() {
      * Only shows rolling stock class info when we have real Darwin unit numbers.
      * Coach count is shown if available and valid.
      */
-    private fun bindUnitInfo(units: List<String>, coachCount: Int, hspSummary: HspSummary?) {
+    private fun bindUnitInfo(units: List<String>, coachCount: Int) {
         val hasUnits   = units.isNotEmpty()
         val hasCoaches = coachCount in 1..20
 
-        if (!hasUnits && !hasCoaches && hspSummary == null) {
+        if (!hasUnits && !hasCoaches) {
             if (binding.layoutPunctuality.isGone) {
                 binding.cardUnitHsp.visibility = View.GONE
             }
@@ -429,7 +428,7 @@ class ServiceDetailActivity : AppCompatActivity() {
             // No Darwin units yet — just show coach count, no class guessing
             binding.tvUnitAllocationLabel.text = getString(R.string.label_formation)
             binding.tvUnitAllocationLabel.visibility = View.VISIBLE
-            binding.tvUnitAllocation.text = getString(R.string.coach_count, coachCount)
+            binding.tvUnitAllocation.text = resources.getQuantityString(R.plurals.coach_count, coachCount, coachCount)
             binding.tvUnitAllocation.visibility = View.VISIBLE
             binding.tvUnitNumbers.visibility = View.GONE
         } else {
@@ -447,7 +446,7 @@ class ServiceDetailActivity : AppCompatActivity() {
 
         val pct = summary.punctualityPct
         binding.tvPunctualityPct.text = getString(R.string.punctuality_pct, pct)
-        binding.tvPunctualitySample.text = getString(R.string.punctuality_runs, summary.totalRuns)
+        binding.tvPunctualitySample.text = resources.getQuantityString(R.plurals.punctuality_runs, summary.totalRuns, summary.totalRuns)
 
         // Colour the badge: green ≥ 85%, amber ≥ 70%, red below
         val colour = when {
@@ -627,7 +626,7 @@ class ServiceDetailActivity : AppCompatActivity() {
         // nor a Darwin formation has already populated it. Otherwise we'd erase
         // the richer consist data that arrived asynchronously.
         if (viewModel.detailFormation.value == null && viewModel.serverAllocation.value == null) {
-            bindUnitInfo(boardUnits, coaches ?: 0, null)
+            bindUnitInfo(boardUnits, coaches ?: 0)
         }
 
         val originName = resolveLocationName(d.origin.ifEmpty { intent.getStringExtra(EXTRA_ORIGIN) ?: "" })
@@ -666,7 +665,7 @@ class ServiceDetailActivity : AppCompatActivity() {
 
     private fun shareCurrentService() {
         val d = cachedDetails ?: return
-        val boardUnits = intent.getStringArrayListExtra(EXTRA_UNITS) ?: emptyList<String>()
+        val boardUnits = intent.getStringArrayListExtra(EXTRA_UNITS) ?: emptyList()
         val formation  = viewModel.detailFormation.value
         val liveUnits  = formation?.units ?: boardUnits
         val journeyStr = if (d.journeyDurationMinutes > 0)

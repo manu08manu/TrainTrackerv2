@@ -270,7 +270,7 @@ data class TrainService(
         }
         minutesUntil <= 0 -> "Due"
         minutesUntil == 1 -> "1 min"
-        minutesUntil < 60 -> "${minutesUntil} min"
+        minutesUntil < 60 -> "$minutesUntil min"
         else              -> ""
     }
 
@@ -520,4 +520,3 @@ data class TrustMovement(
     val isCancelled: Boolean,
     val delayMinutes: Int = 0
 )
-

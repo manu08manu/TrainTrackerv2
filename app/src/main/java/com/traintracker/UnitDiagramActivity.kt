@@ -230,7 +230,6 @@ class UnitDiagramActivity : AppCompatActivity() {
         val operatorName = TocData.get(s.atocCode)?.name ?: s.atocCode
         val originName   = s.originCrs?.let { StationData.findByCrs(it)?.name } ?: s.originCrs ?: s.originTiploc
         val destName     = s.destCrs?.let   { StationData.findByCrs(it)?.name } ?: s.destCrs   ?: s.destTiploc
-        val delayMins    = minuteDelay(s.scheduledTime, s.actualTime.ifEmpty { s.scheduledTime })
         return TrainService(
             std                  = s.scheduledTime,
             etd                  = s.actualTime.ifEmpty { "On time" },

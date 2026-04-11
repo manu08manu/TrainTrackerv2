@@ -10,14 +10,11 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
-import com.traintracker.safeString
 import java.net.SocketTimeoutException
-import java.util.concurrent.TimeUnit
 
 class ServerApiClient {
 
@@ -95,7 +92,7 @@ class ServerApiClient {
                 )
             }
             emit(HspProgressEvent(100, services, done = true))
-        } catch (e: SocketTimeoutException) {
+        } catch (_: SocketTimeoutException) {
             // First load of an uncached route can exceed even 180s on a slow HSP API day.
             // Emit a timeout sentinel — the UI should prompt the user to retry.
             // The server caches chunks as they complete, so a retry will be faster.
@@ -130,7 +127,7 @@ class ServerApiClient {
         withContext(Dispatchers.IO) {
             try {
                 get("/api/trust/resolve/$headcode")?.optString("resolved")?.ifEmpty { headcode } ?: headcode
-            } catch (e: Exception) { headcode }
+            } catch (_: Exception) { headcode }
         }
 
     /**
@@ -141,7 +138,7 @@ class ServerApiClient {
         withContext(Dispatchers.IO) {
             try {
                 get("/api/trust/locate/$headcode")?.safeString("crs")?.ifEmpty { null }
-            } catch (e: Exception) { null }
+            } catch (_: Exception) { null }
         }
 
     suspend fun getDepartures(crs: String, windowMinutes: Int = 120, offset: Int = 0): List<ServerService> =
@@ -217,7 +214,7 @@ class ServerApiClient {
                     previous   = parseCallingPoints(json.optJSONArray("previous")),
                     subsequent = parseCallingPoints(json.optJSONArray("subsequent"))
                 )
-            } catch (e: Exception) { null }
+            } catch (_: Exception) { null }
         }
 
     suspend fun getMovementsForHeadcode(headcode: String, uid: String = ""): List<TrustMovement> =
@@ -309,7 +306,7 @@ class ServerApiClient {
         toTime:   String  = "2359"
     ): HspMetricsResult? = withContext(Dispatchers.IO) {
         try {
-            val body = org.json.JSONObject().apply {
+            val body = JSONObject().apply {
                 put("from_loc",  fromCrs.uppercase())
                 put("to_loc",    toCrs.uppercase())
                 put("from_date", fromDate)
@@ -318,7 +315,7 @@ class ServerApiClient {
                 put("to_time",   toTime)
             }
             val raw = postRaw("/api/hsp/metrics", body.toString()) ?: return@withContext null
-            val json = org.json.JSONObject(raw)
+            val json = JSONObject(raw)
             val svcs = json.optJSONArray("services") ?: return@withContext null
             val services = (0 until svcs.length()).mapNotNull { i ->
                 val s = svcs.optJSONObject(i) ?: return@mapNotNull null
@@ -344,7 +341,7 @@ class ServerApiClient {
 
     suspend fun getHspDetails(rid: String, scheduledDep: String = "", originCrs: String = "", scheduledArr: String = "", destTiploc: String = ""): HspDetailsResult? = withContext(Dispatchers.IO) {
         try {
-            val body = org.json.JSONObject().apply {
+            val body = JSONObject().apply {
                 put("rid", rid)
                 if (scheduledDep.isNotEmpty()) put("scheduled_dep", scheduledDep)
                 if (originCrs.isNotEmpty()) put("origin_crs", originCrs)
@@ -353,7 +350,7 @@ class ServerApiClient {
                 
             }
             val raw  = postRaw("/api/hsp/details", body.toString()) ?: return@withContext null
-            val json = org.json.JSONObject(raw)
+            val json = JSONObject(raw)
             val locs = json.optJSONArray("locations") ?: return@withContext null
             HspDetailsResult(
                 rid       = json.optString("rid"),
@@ -390,7 +387,7 @@ class ServerApiClient {
 
     suspend fun getKbIncidents(): List<KbIncident> = withContext(Dispatchers.IO) {
         try {
-            val arr = org.json.JSONArray(getRaw("/api/kb/incidents") ?: return@withContext emptyList())
+            val arr = JSONArray(getRaw("/api/kb/incidents") ?: return@withContext emptyList())
             (0 until arr.length()).mapNotNull { i ->
                 val o = arr.optJSONObject(i) ?: return@mapNotNull null
                 val ops = o.optJSONArray("operators")?.let { a ->
@@ -411,7 +408,7 @@ class ServerApiClient {
 
     suspend fun getKbNsi(): List<KbNsiEntry> = withContext(Dispatchers.IO) {
         try {
-            val arr = org.json.JSONArray(getRaw("/api/kb/nsi") ?: return@withContext emptyList())
+            val arr = JSONArray(getRaw("/api/kb/nsi") ?: return@withContext emptyList())
             (0 until arr.length()).mapNotNull { i ->
                 val o = arr.optJSONObject(i) ?: return@mapNotNull null
                 val disArr = o.optJSONArray("disruptions")
@@ -436,7 +433,7 @@ class ServerApiClient {
 
     suspend fun getKbToc(): List<KbTocEntry> = withContext(Dispatchers.IO) {
         try {
-            val arr = org.json.JSONArray(getRaw("/api/kb/toc") ?: return@withContext emptyList())
+            val arr = JSONArray(getRaw("/api/kb/toc") ?: return@withContext emptyList())
             (0 until arr.length()).mapNotNull { i ->
                 val o = arr.optJSONObject(i) ?: return@mapNotNull null
                 KbTocEntry(
@@ -586,11 +583,6 @@ class ServerApiClient {
         return response.body.string().trim()
     }
 }
-
-data class TrainLocationResult(
-    val headcode: String, val stationName: String, val crs: String?,
-    val actualTime: String, val eventType: String, val delayMinutes: Int
-)
 
 data class ServerService(
     val uid: String, val headcode: String, val atocCode: String,
@@ -747,3 +739,4 @@ data class KbTocEntry(
     val assistedTravelUrl: String = "",
     val lostPropertyUrl: String = ""
 )
+

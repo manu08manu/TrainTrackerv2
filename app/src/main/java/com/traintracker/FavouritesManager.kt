@@ -22,3 +22,4 @@ class FavouritesManager(context: Context) {
 
     fun isFavourite(crs: String) = prefs.contains(crs.uppercase())
 }
+

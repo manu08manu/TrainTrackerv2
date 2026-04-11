@@ -80,3 +80,4 @@ object StationData {
             dLat * dLat + dLon * dLon
         }
 }
+

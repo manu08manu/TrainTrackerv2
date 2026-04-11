@@ -93,3 +93,4 @@ object RailTourData {
         ServiceCategory.SPECIAL      to "⚡"
     )
 }
+

@@ -1,4 +1,5 @@
 package com.traintracker
+import android.annotation.SuppressLint
 
 import android.content.Context
 import android.content.Intent
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+@SuppressLint("SetTextI18n")
 class StationBoardActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityStationBoardBinding
@@ -85,9 +87,6 @@ class StationBoardActivity : AppCompatActivity() {
         viewModel.fetchBoard(currentCrs, currentBoardType)
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-    }
 
     // ── Station info dialog ───────────────────────────────────────────────────
     private fun showStationInfoDialog(crs: String, name: String) {
@@ -244,7 +243,6 @@ class StationBoardActivity : AppCompatActivity() {
         val touchHelper = androidx.recyclerview.widget.ItemTouchHelper(swipe)
         touchHelper.attachToRecyclerView(binding.rvTrains)
         binding.rvTrains.adapter = adapter
-        binding.rvTrains.setOnTouchListener(null)
     }
 
     // ── Headcode search ───────────────────────────────────────────────────────
@@ -337,8 +335,7 @@ class StationBoardActivity : AppCompatActivity() {
                 tag = "nrcc"
                 text = "ℹ ${msg.take(50)}${if (msg.length > 50) "…" else ""}"
                 textSize = 11f
-            maxLines = 2
-            ellipsize = android.text.TextUtils.TruncateAt.END
+                ellipsize = android.text.TextUtils.TruncateAt.END
                 isClickable = true
                 chipBackgroundColor = ColorStateList.valueOf(severity)
                 setTextColor(Color.WHITE)
@@ -397,8 +394,7 @@ class StationBoardActivity : AppCompatActivity() {
                         val chip = Chip(this@StationBoardActivity).apply {
                             text = if (incident.isPlanned) "🔧 ${incident.summary}" else "⚠ ${incident.summary}"
                             textSize = 11f
-            maxLines = 2
-            ellipsize = android.text.TextUtils.TruncateAt.END
+                            ellipsize = android.text.TextUtils.TruncateAt.END
                             chipBackgroundColor = ColorStateList.valueOf(0xFFB71C1C.toInt())
                             setTextColor(Color.WHITE)
                             layoutParams = ViewGroup.MarginLayoutParams(
@@ -455,8 +451,7 @@ class StationBoardActivity : AppCompatActivity() {
                         val chip = Chip(this@StationBoardActivity).apply {
                             text = "✓ Good service on all operators"
                             textSize = 11f
-            maxLines = 2
-            ellipsize = android.text.TextUtils.TruncateAt.END
+                            ellipsize = android.text.TextUtils.TruncateAt.END
                             chipBackgroundColor = ColorStateList.valueOf(0xFF2E7D32.toInt())
                             setTextColor(Color.WHITE)
                         }
@@ -479,8 +474,7 @@ class StationBoardActivity : AppCompatActivity() {
                         val chip = Chip(this@StationBoardActivity).apply {
                             text = chipLabel
                             textSize = 11f
-            maxLines = 2
-            ellipsize = android.text.TextUtils.TruncateAt.END
+                            ellipsize = android.text.TextUtils.TruncateAt.END
                             chipBackgroundColor = ColorStateList.valueOf(bgColor)
                             setTextColor(Color.WHITE)
                             layoutParams = ViewGroup.MarginLayoutParams(

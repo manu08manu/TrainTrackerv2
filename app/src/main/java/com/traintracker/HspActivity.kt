@@ -144,7 +144,6 @@ class HspViewModel : ViewModel() {
                     }
                 }
                 val rows = result.locations.map { loc ->
-                    val crs  = loc.crs.ifEmpty { loc.tiploc }
                     val name = StationData.findByCrs(loc.crs)?.name ?: loc.name.ifEmpty { loc.tiploc }
                     val sched  = loc.scheduledDep.ifEmpty { loc.scheduledArr }
                     val actual = loc.actualDep.ifEmpty { loc.actualArr }

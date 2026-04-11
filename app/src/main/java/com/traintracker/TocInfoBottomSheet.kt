@@ -12,6 +12,8 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.graphics.ColorUtils
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
+import androidx.core.net.toUri
+import androidx.core.view.isEmpty
 
 class TocInfoBottomSheet : BottomSheetDialogFragment() {
 
@@ -135,33 +137,33 @@ class TocInfoBottomSheet : BottomSheetDialogFragment() {
         }
 
         addRow("📞", "Customer services", phone) {
-            startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone")))
+            startActivity(Intent(Intent.ACTION_DIAL, "tel:$phone".toUri()))
         }
         addRow("🌐", "Website",
             website.removePrefix("https://").removePrefix("http://")) {
             startActivity(Intent(Intent.ACTION_VIEW,
-                Uri.parse(if (website.startsWith("http")) website else "https://$website")))
+                (if (website.startsWith("http")) website else "https://$website").toUri()))
         }
         addRow("♿", "Assisted travel", atPhone) {
-            startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$atPhone")))
+            startActivity(Intent(Intent.ACTION_DIAL, "tel:$atPhone".toUri()))
         }
         addRow("🔗", "Assisted travel booking",
             atUrl.removePrefix("https://").removePrefix("http://")) {
             startActivity(Intent(Intent.ACTION_VIEW,
-                Uri.parse(if (atUrl.startsWith("http")) atUrl else "https://$atUrl")))
+                (if (atUrl.startsWith("http")) atUrl else "https://$atUrl").toUri()))
         }
         addRow("🧳", "Lost property",
             lpUrl.removePrefix("https://").removePrefix("http://")) {
             startActivity(Intent(Intent.ACTION_VIEW,
-                Uri.parse(if (lpUrl.startsWith("http")) lpUrl else "https://$lpUrl")))
+                (if (lpUrl.startsWith("http")) lpUrl else "https://$lpUrl").toUri()))
         }
         addRow("𝕏", "Live updates",
             if (twitter.isNotEmpty()) "@$twitter" else "") {
             startActivity(Intent(Intent.ACTION_VIEW,
-                Uri.parse("https://x.com/$twitter")))
+                "https://x.com/$twitter".toUri()))
         }
 
-        if (body.childCount == 0) {
+        if (body.isEmpty()) {
             body.addView(TextView(ctx).apply {
                 text     = "No contact details available"
                 textSize = 13f
