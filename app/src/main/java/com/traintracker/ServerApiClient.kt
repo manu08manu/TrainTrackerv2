@@ -32,16 +32,8 @@ class ServerApiClient {
     private val baseUrl: String
         get() = try { Constants.SERVER_BASE_URL.trimEnd('/') } catch (_: Exception) { "" }
 
-    private val http = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .build()
-
-    // 180s to cover worst-case uncached full-day HSP queries (4 chunks × ~40s each)
-    private val sseHttp = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(360, TimeUnit.SECONDS)
-        .build()
+    private val http get() = TrainTrackerApp.httpClient
+    private val sseHttp get() = TrainTrackerApp.httpClient
 
     // ── HSP progress event ─────────────────────────────────────────────────────
     data class HspProgressEvent(
@@ -395,6 +387,95 @@ class ServerApiClient {
         }
     }
 
+
+    suspend fun getKbIncidents(): List<KbIncident> = withContext(Dispatchers.IO) {
+        try {
+            val arr = org.json.JSONArray(getRaw("/api/kb/incidents") ?: return@withContext emptyList())
+            (0 until arr.length()).mapNotNull { i ->
+                val o = arr.optJSONObject(i) ?: return@mapNotNull null
+                val ops = o.optJSONArray("operators")?.let { a ->
+                    (0 until a.length()).map { a.getString(it) }
+                } ?: emptyList()
+                KbIncident(
+                    id          = o.optString("id"),
+                    summary     = o.optString("summary"),
+                    description = o.optString("description"),
+                    isPlanned   = o.optBoolean("isPlanned"),
+                    startTime   = o.optString("startTime"),
+                    endTime     = o.optString("endTime"),
+                    operators   = ops
+                )
+            }
+        } catch (e: Exception) { Log.w(TAG, "getKbIncidents: \${e.message}"); emptyList() }
+    }
+
+    suspend fun getKbNsi(): List<KbNsiEntry> = withContext(Dispatchers.IO) {
+        try {
+            val arr = org.json.JSONArray(getRaw("/api/kb/nsi") ?: return@withContext emptyList())
+            (0 until arr.length()).mapNotNull { i ->
+                val o = arr.optJSONObject(i) ?: return@mapNotNull null
+                val disArr = o.optJSONArray("disruptions")
+                val disruptions = if (disArr != null) {
+                    (0 until disArr.length()).mapNotNull { j ->
+                        val d = disArr.optJSONObject(j) ?: return@mapNotNull null
+                        NsiDisruption(d.optString("detail"), d.optString("url"))
+                    }
+                } else emptyList()
+                KbNsiEntry(
+                    tocCode           = o.optString("tocCode"),
+                    tocName           = o.optString("tocName"),
+                    status            = o.optString("status"),
+                    statusDescription = o.optString("statusDescription"),
+                    disruptions       = disruptions,
+                    twitterHandle     = o.optString("twitterHandle"),
+                    additionalInfo    = o.optString("additionalInfo")
+                )
+            }
+        } catch (e: Exception) { Log.w(TAG, "getKbNsi: \${e.message}"); emptyList() }
+    }
+
+    suspend fun getKbToc(): List<KbTocEntry> = withContext(Dispatchers.IO) {
+        try {
+            val arr = org.json.JSONArray(getRaw("/api/kb/toc") ?: return@withContext emptyList())
+            (0 until arr.length()).mapNotNull { i ->
+                val o = arr.optJSONObject(i) ?: return@mapNotNull null
+                KbTocEntry(
+                    code                 = o.optString("code"),
+                    name                 = o.optString("name"),
+                    website              = o.optString("website"),
+                    customerServicePhone = o.optString("customerServicePhone"),
+                    assistedTravelPhone  = o.optString("assistedTravelPhone"),
+                    assistedTravelUrl    = o.optString("assistedTravelUrl"),
+                    lostPropertyUrl      = o.optString("lostPropertyUrl")
+                )
+            }
+        } catch (e: Exception) { Log.w(TAG, "getKbToc: \${e.message}"); emptyList() }
+    }
+
+    suspend fun getKbStation(crs: String): KbStation? = withContext(Dispatchers.IO) {
+        try {
+            val o = get("/api/kb/station/${crs.uppercase()}") ?: return@withContext null
+            KbStation(
+                crs               = o.optString("crs"),
+                name              = o.optString("name"),
+                address           = o.optString("address"),
+                telephone         = o.optString("telephone"),
+                staffingNote      = o.optString("staffingNote"),
+                ticketOfficeHours = o.optString("ticketOfficeHours"),
+                sstmAvailability  = o.optString("sstmAvailability"),
+                stepFreeAccess    = o.optString("stepFreeAccess"),
+                assistanceAvail   = o.optString("assistanceAvail"),
+                wifi              = o.optString("wifi"),
+                toilets           = o.optString("toilets"),
+                waitingRoom       = o.optString("waitingRoom"),
+                cctv              = o.optString("cctv"),
+                taxi              = o.optString("taxi"),
+                busInterchange    = "",
+                carParking        = o.optString("carParking")
+            )
+        } catch (e: Exception) { Log.w(TAG, "getKbStation: \${e.message}"); null }
+    }
+
     private fun fetchMovements(headcode: String, uid: String = ""): List<TrustMovement> {
         val array = get("/api/trust/movements?headcode=$headcode${if (uid.isNotEmpty()) "&uid=$uid" else ""}")?.optJSONArray("movements") ?: return emptyList()
         val result = mutableListOf<TrustMovement>()
@@ -590,4 +671,79 @@ data class HspDetailsResult(
     val vehicles:  List<String> = emptyList(),
     val unitCount: Int = 0,
     val locations: List<HspLocationResult>
+)
+// ─── KB data models (previously in KnowledgebaseService.kt) ──────────────────
+
+data class KbIncident(
+    val id: String,
+    val summary: String,
+    val description: String,
+    val isPlanned: Boolean,
+    val startTime: String,
+    val endTime: String,
+    val operators: List<String>
+)
+
+data class NsiDisruption(
+    val detail: String,
+    val url: String
+)
+
+data class KbNsiEntry(
+    val tocCode: String,
+    val tocName: String,
+    val status: String,
+    val statusDescription: String = "",
+    val disruptions: List<NsiDisruption> = emptyList(),
+    val twitterHandle: String = "",
+    val additionalInfo: String = ""
+) {
+    val statusLevel: Int get() = status.toIntOrNull() ?: 1
+    val isGood:      Boolean get() = statusLevel == 1
+    val isDisrupted: Boolean get() = statusLevel == 3
+    val isSevere:    Boolean get() = statusLevel == 4
+    val isMajor:     Boolean get() = isDisrupted
+    val statusLabel: String get() = when (statusLevel) {
+        1    -> "Good service"
+        2    -> "Advisory"
+        3    -> "Disruption"
+        4    -> "Severe disruption"
+        else -> "Unknown"
+    }
+    val statusEmoji: String get() = when (statusLevel) {
+        1    -> "✓"
+        2    -> "⚠"
+        3    -> "🚨"
+        4    -> "🚫"
+        else -> ""
+    }
+}
+
+data class KbStation(
+    val crs: String,
+    val name: String,
+    val address: String,
+    val telephone: String,
+    val staffingNote: String,
+    val ticketOfficeHours: String,
+    val sstmAvailability: String,
+    val stepFreeAccess: String,
+    val assistanceAvail: String,
+    val wifi: String,
+    val toilets: String,
+    val waitingRoom: String,
+    val cctv: String,
+    val taxi: String,
+    val busInterchange: String,
+    val carParking: String
+)
+
+data class KbTocEntry(
+    val code: String,
+    val name: String,
+    val website: String = "",
+    val customerServicePhone: String = "",
+    val assistedTravelPhone: String = "",
+    val assistedTravelUrl: String = "",
+    val lostPropertyUrl: String = ""
 )

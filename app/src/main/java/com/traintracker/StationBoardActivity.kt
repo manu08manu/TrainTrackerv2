@@ -39,7 +39,7 @@ class StationBoardActivity : AppCompatActivity() {
 
 
     // Instance of KnowledgebaseService for station lookups
-    private val kbService = KnowledgebaseService()
+    private val kbService = ServerApiClient()
 
     companion object {
         private const val EXTRA_CRS  = "crs"
@@ -93,7 +93,7 @@ class StationBoardActivity : AppCompatActivity() {
     private fun showStationInfoDialog(crs: String, name: String) {
         lifecycleScope.launch {
             val station = withContext(Dispatchers.IO) {
-                kbService.getStation(crs)
+                kbService.getKbStation(crs)
             }
             if (!isFinishing && !isDestroyed) {
                 if (station == null) {
@@ -337,6 +337,8 @@ class StationBoardActivity : AppCompatActivity() {
                 tag = "nrcc"
                 text = "ℹ ${msg.take(50)}${if (msg.length > 50) "…" else ""}"
                 textSize = 11f
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
                 isClickable = true
                 chipBackgroundColor = ColorStateList.valueOf(severity)
                 setTextColor(Color.WHITE)
@@ -395,6 +397,8 @@ class StationBoardActivity : AppCompatActivity() {
                         val chip = Chip(this@StationBoardActivity).apply {
                             text = if (incident.isPlanned) "🔧 ${incident.summary}" else "⚠ ${incident.summary}"
                             textSize = 11f
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
                             chipBackgroundColor = ColorStateList.valueOf(0xFFB71C1C.toInt())
                             setTextColor(Color.WHITE)
                             layoutParams = ViewGroup.MarginLayoutParams(
@@ -408,7 +412,7 @@ class StationBoardActivity : AppCompatActivity() {
                                 else
                                     incident.summary
                                 AlertDialog.Builder(this@StationBoardActivity)
-                                    .setTitle("Service Disruption")
+                                    .setTitle(if (incident.isPlanned) "Planned Engineering" else "Service Disruption")
                                     .setMessage(msg)
                                     .setPositiveButton("OK", null)
                                     .show()
@@ -451,6 +455,8 @@ class StationBoardActivity : AppCompatActivity() {
                         val chip = Chip(this@StationBoardActivity).apply {
                             text = "✓ Good service on all operators"
                             textSize = 11f
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
                             chipBackgroundColor = ColorStateList.valueOf(0xFF2E7D32.toInt())
                             setTextColor(Color.WHITE)
                         }
@@ -473,6 +479,8 @@ class StationBoardActivity : AppCompatActivity() {
                         val chip = Chip(this@StationBoardActivity).apply {
                             text = chipLabel
                             textSize = 11f
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
                             chipBackgroundColor = ColorStateList.valueOf(bgColor)
                             setTextColor(Color.WHITE)
                             layoutParams = ViewGroup.MarginLayoutParams(

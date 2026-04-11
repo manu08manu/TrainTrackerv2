@@ -20,7 +20,7 @@ import kotlinx.coroutines.withContext
 class StationInfoActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityStationInfoBinding
-    private val kb = KnowledgebaseService()
+    private val server = ServerApiClient()
 
     companion object {
         private const val EXTRA_CRS  = "crs"
@@ -56,7 +56,7 @@ class StationInfoActivity : AppCompatActivity() {
         binding.scrollContent.visibility = View.GONE
 
         lifecycleScope.launch {
-            val station = withContext(Dispatchers.IO) { kb.getStation(crs) }
+            val station = withContext(Dispatchers.IO) { server.getKbStation(crs) }
 
             binding.progressBar.visibility = View.GONE
 

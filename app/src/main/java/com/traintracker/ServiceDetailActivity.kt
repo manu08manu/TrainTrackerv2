@@ -242,8 +242,13 @@ class ServiceDetailActivity : AppCompatActivity() {
                             binding.contentGroup.visibility = View.VISIBLE
                             // Preserve board-level cancellation if server doesn't know yet
                             val boardCancelled = intent.getBooleanExtra(EXTRA_IS_CANCELLED, false)
-                            val mergedDetails = if (boardCancelled && !state.details.isCancelled)
+                            val boardCancelReason = intent.getStringExtra(EXTRA_CANCEL_REASON) ?: ""
+                            var mergedDetails = if (boardCancelled && !state.details.isCancelled)
                                 state.details.copy(isCancelled = true) else state.details
+                            // Use board cancel reason if service detail doesn't have one
+                            if (mergedDetails.cancelReason.isEmpty() && boardCancelReason.isNotEmpty()) {
+                                mergedDetails = mergedDetails.copy(cancelReason = boardCancelReason)
+                            }
                             cachedDetails = mergedDetails
                             if (trainHeadcode.isEmpty()) {
                                 trainHeadcode = mergedDetails.trainId
