@@ -13,3 +13,8 @@ local.properties
 Constants.kt
 .gradle/
 .idea/
+index.html
+script.js
+styles.css
+*.xml.descriptions
+.descriptions.xml
