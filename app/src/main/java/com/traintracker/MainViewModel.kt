@@ -281,7 +281,7 @@ class MainViewModel : ViewModel() {
 
     private suspend fun buildServerBoard(): UiState {
         val stationName   = StationData.findByCrs(lastCrs)?.name ?: lastCrs
-        val windowMinutes = 120 + _timeOffset.value.coerceAtLeast(0)
+        val windowMinutes = 30
         val offset        = _timeOffset.value
 
         val serverDeps = if (lastBoardType == BoardType.DEPARTURES)

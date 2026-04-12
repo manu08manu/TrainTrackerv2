@@ -242,7 +242,7 @@ class TrainAdapter(
             }
             if (displayDelay > 0) {
                 b.tvDelay.text = b.root.context.getString(R.string.delay_mins_short, displayDelay)
-                b.tvDelay.visibility = View.GONE
+                b.tvDelay.visibility = View.VISIBLE
             } else {
                 b.tvDelay.visibility = View.GONE
             }
