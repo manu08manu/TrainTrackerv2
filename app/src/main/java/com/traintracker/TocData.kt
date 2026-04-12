@@ -105,18 +105,4 @@ object TocData {
         return try { hex.toColorInt() } catch (_: Exception) { 0xFF555555.toInt() }
     }
 
-    /**
-     * Reverse lookup: find the 2-letter ATOC code from a full TOC name.
-     * Used to match NSI feed entries (which give TOC names) to operator codes.
-     * Case-insensitive, partial match supported.
-     */
-    fun codeFromName(name: String): String {
-        if (name.isBlank()) return ""
-        val upper = name.uppercase()
-        return BY_CODE.values.firstOrNull {
-            it.name.uppercase() == upper ||
-                    upper.contains(it.name.uppercase()) ||
-                    it.name.uppercase().contains(upper)
-        }?.code ?: ""
-    }
 }

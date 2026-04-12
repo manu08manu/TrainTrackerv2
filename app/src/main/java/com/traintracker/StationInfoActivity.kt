@@ -79,7 +79,7 @@ class StationInfoActivity : AppCompatActivity() {
 
         // Phone
         if (s.telephone.isNotEmpty()) {
-            binding.tvPhone.text = "📞 ${s.telephone}"
+            binding.tvPhone.text = getString(R.string.station_phone, s.telephone)
             binding.tvPhone.visibility = View.VISIBLE
         }
 
@@ -99,20 +99,19 @@ class StationInfoActivity : AppCompatActivity() {
         else ""
 
         // Accessibility
-        binding.tvStepFree.text  = "♿ Step-free access: ${s.stepFreeAccess.ifEmpty { getString(R.string.info_unknown) }}"
-        binding.tvAssistance.text = "🤝 Assistance: ${s.assistanceAvail.ifEmpty { getString(R.string.info_unknown) }}"
+        binding.tvStepFree.text  = getString(R.string.station_step_free, s.stepFreeAccess.ifEmpty { getString(R.string.info_unknown) })
+        binding.tvAssistance.text = getString(R.string.station_assistance, s.assistanceAvail.ifEmpty { getString(R.string.info_unknown) })
 
         // Facilities
-        binding.tvWifi.text    = "📶 WiFi: ${s.wifi.ifEmpty { getString(R.string.info_unknown) }}"
-        binding.tvToilets.text = "🚻 Toilets: ${s.toilets.ifEmpty { getString(R.string.info_unknown) }}"
-        binding.tvWaiting.text = "🪑 Waiting room: ${s.waitingRoom.ifEmpty { getString(R.string.info_unknown) }}"
-        binding.tvCctv.text    = "📷 CCTV: ${s.cctv.ifEmpty { getString(R.string.info_unknown) }}"
+        binding.tvWifi.text    = getString(R.string.station_wifi, s.wifi.ifEmpty { getString(R.string.info_unknown) })
+        binding.tvToilets.text = getString(R.string.station_toilets, s.toilets.ifEmpty { getString(R.string.info_unknown) })
+        binding.tvWaiting.text = getString(R.string.station_waiting, s.waitingRoom.ifEmpty { getString(R.string.info_unknown) })
+        binding.tvCctv.text    = getString(R.string.station_cctv, s.cctv.ifEmpty { getString(R.string.info_unknown) })
 
         // Getting here
-        binding.tvTaxi.text    = "🚕 Taxi: ${s.taxi.ifEmpty { getString(R.string.info_unknown) }}"
-        binding.tvBus.text     = "🚌 Bus interchange: ${s.busInterchange.ifEmpty { getString(R.string.info_unknown) }}"
+        binding.tvTaxi.text    = getString(R.string.station_taxi, s.taxi.ifEmpty { getString(R.string.info_unknown) })
+        binding.tvBus.text     = getString(R.string.station_bus, s.busInterchange.ifEmpty { getString(R.string.info_unknown) })
         binding.tvParking.text = if (s.carParking.isNotEmpty()) "🅿 ${s.carParking}"
-                                 else "🅿 Parking: ${getString(R.string.info_unknown)}"
+        else "🅿 Parking: ${getString(R.string.info_unknown)}"
     }
 }
-

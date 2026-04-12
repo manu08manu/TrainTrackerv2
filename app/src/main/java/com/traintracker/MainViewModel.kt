@@ -136,7 +136,7 @@ class MainViewModel : ViewModel() {
 
     private var incidentsFetchedAt = 0L
     private var nsiFetchedAt       = 0L
-    private val KB_TTL_MS          = 5 * 60 * 1000L  // 5 minutes
+    private val kbTtlMs            = 5 * 60 * 1000L  // 5 minutes
 
     init {
         viewModelScope.launch {
@@ -210,7 +210,7 @@ class MainViewModel : ViewModel() {
         }
 
         // Convert HspServiceMetrics → TrainService so the existing board UI works unchanged
-        val services = result.services.mapNotNull { s ->
+        val services = result.services.map { s ->
             val originCrs  = s.originTiploc
             val destCrs    = s.destTiploc
             val originName = StationData.findByCrs(originCrs)?.name ?: originCrs
@@ -423,32 +423,6 @@ class MainViewModel : ViewModel() {
     }
     fun clearHeadcodeFilter() { _headcodeFilter.value = ""; if (lastCrs.isNotEmpty()) doFetch() }
 
-    /**
-     * Attempts to locate a headcode globally (no station required).
-     * Calls back [onFound] with the CRS if the server can place it,
-     * or [onNotFound] if it cannot.
-     */
-    fun locateHeadcodeGlobally(
-        headcode: String,
-        onFound: (crs: String) -> Unit,
-        onNotFound: () -> Unit
-    ) {
-        if (!server.isEnabled) { onNotFound(); return }
-        viewModelScope.launch {
-            // Try TRUST live location first
-            val trustCrs = try {
-                server.findHeadcodeStation(headcode.uppercase())
-            } catch (_: Exception) { null }
-            if (!trustCrs.isNullOrEmpty()) { onFound(trustCrs); return@launch }
-
-            // Fall back to headcode board — use the origin CRS of the first service
-            val services = try {
-                server.getHeadcodeBoard(headcode.uppercase())
-            } catch (_: Exception) { null }
-            val fallbackCrs = services?.firstOrNull()?.originCrs
-            if (!fallbackCrs.isNullOrEmpty()) onFound(fallbackCrs) else onNotFound()
-        }
-    }
 
     private fun startAutoRefresh() {
         autoRefreshJob?.cancel()
@@ -466,7 +440,7 @@ class MainViewModel : ViewModel() {
 
     fun fetchIncidents() {
         val now = System.currentTimeMillis()
-        if (now - incidentsFetchedAt < KB_TTL_MS) return
+        if (now - incidentsFetchedAt < kbTtlMs) return
         viewModelScope.launch {
             try {
                 _incidents.value = withContext(Dispatchers.IO) { server.getKbIncidents() }
@@ -489,7 +463,7 @@ class MainViewModel : ViewModel() {
 
     fun fetchNsi() {
         val now = System.currentTimeMillis()
-        if (now - nsiFetchedAt < KB_TTL_MS) return
+        if (now - nsiFetchedAt < kbTtlMs) return
         viewModelScope.launch {
             try {
                 _nsi.value = withContext(Dispatchers.IO) { server.getKbNsi() }
@@ -616,7 +590,7 @@ class MainViewModel : ViewModel() {
 
     fun trackDetailService(trainId: String, callingPoints: List<CallingPoint> = emptyList()) {
         viewModelScope.launch {
-            val resolved = try { server.resolveHeadcode(trainId.uppercase()) } catch (e: Exception) { trainId.uppercase() }
+            val resolved = try { server.resolveHeadcode(trainId.uppercase()) } catch (_: Exception) { trainId.uppercase() }
             detailTrainId       = resolved
             detailCallingPoints = callingPoints
             _detailLiveState.value = DetailLiveState()
@@ -834,7 +808,6 @@ class MainViewModel : ViewModel() {
     private val _unitBoard = MutableStateFlow<UiState?>(null)
     val unitBoard: StateFlow<UiState?> = _unitBoard.asStateFlow()
 
-    fun clearUnitBoard() { _unitBoard.value = null }
 
     fun fetchUnitBoard(unit: String, onNotFound: () -> Unit) {
         if (!server.isEnabled) { onNotFound(); return }
@@ -843,7 +816,7 @@ class MainViewModel : ViewModel() {
         _unitBoard.value = UiState.Loading
         viewModelScope.launch {
             val services = try { server.getUnitBoard(u) } catch (_: Exception) { null }
-            if (services == null || services.isEmpty()) {
+            if (services.isNullOrEmpty()) {
                 _unitBoard.value = null
                 onNotFound()
                 return@launch
@@ -883,7 +856,7 @@ class MainViewModel : ViewModel() {
         _headcodeBoard.value = UiState.Loading
         viewModelScope.launch {
             val services = try { server.getHeadcodeBoard(h) } catch (_: Exception) { emptyList() }
-            if (services == null || services.isEmpty()) {
+            if (services.isNullOrEmpty()) {
                 _headcodeBoard.value = null
                 onNotFound()
                 return@launch

@@ -1,7 +1,5 @@
 package com.traintracker
 
-import android.content.Context
-import android.graphics.Color
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -36,9 +34,11 @@ class UnitDiagramAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     private val items = mutableListOf<DiagramItem>()
 
     fun submitItems(newItems: List<DiagramItem>) {
+        val oldSize = items.size
         items.clear()
+        if (oldSize > 0) notifyItemRangeRemoved(0, oldSize)
         items.addAll(newItems)
-        notifyDataSetChanged()
+        if (newItems.isNotEmpty()) notifyItemRangeInserted(0, newItems.size)
     }
 
     override fun getItemCount() = items.size
@@ -104,7 +104,7 @@ class UnitDiagramAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             tvHeadcode.text = s.trainId
 
             // ── Route ──────────────────────────────────────────────────────
-            tvRoute.text = "${s.origin} → ${s.destination}"
+            tvRoute.text = itemView.context.getString(R.string.diagram_route, s.origin, s.destination)
 
             // ── Formation ─────────────────────────────────────────────────
             val unitStr = s.units.joinToString(" + ")
@@ -118,15 +118,15 @@ class UnitDiagramAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             // ── Status chip ────────────────────────────────────────────────
             when {
                 s.isCancelled -> {
-                    tvStatus.text = "Cancelled"
+                    tvStatus.text = itemView.context.getString(R.string.status_cancelled)
                     tvStatus.setBackgroundColor(ContextCompat.getColor(ctx, R.color.status_cancelled))
                 }
                 s.isDelayed && s.delayMinutes > 0 -> {
-                    tvStatus.text = "+${s.delayMinutes}m"
+                    tvStatus.text = itemView.context.getString(R.string.diagram_delay, s.delayMinutes)
                     tvStatus.setBackgroundColor(ContextCompat.getColor(ctx, R.color.status_delayed))
                 }
                 else -> {
-                    tvStatus.text = "On time"
+                    tvStatus.text = itemView.context.getString(R.string.status_on_time)
                     tvStatus.setBackgroundColor(ContextCompat.getColor(ctx, R.color.status_ontime))
                 }
             }
@@ -134,7 +134,7 @@ class UnitDiagramAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             // ── Split annotation ───────────────────────────────────────────
             if (s.splitToHeadcode.isNotEmpty()) {
                 val at = s.splitTiplocName.ifEmpty { s.splitTiploc }.ifEmpty { "?" }
-                tvSplitInfo.text  = "✂  Splits at $at  →  ${s.splitToHeadcode}"
+                tvSplitInfo.text  = itemView.context.getString(R.string.diagram_split, at, s.splitToHeadcode)
                 splitBar.visibility = View.VISIBLE
             } else {
                 splitBar.visibility = View.GONE
@@ -222,11 +222,11 @@ class UnitDiagramAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
             // ── Delay pill ─────────────────────────────────────────────────
             if (cp.delayMinutes > 0 && !item.serviceIsCancelled) {
-                tvDelay.text       = "+${cp.delayMinutes}"
+                tvDelay.text       = itemView.context.getString(R.string.diagram_delay_cp, cp.delayMinutes)
                 tvDelay.visibility = View.VISIBLE
                 tvDelay.setTextColor(ContextCompat.getColor(ctx, R.color.status_delayed))
             } else if (cp.isCancelled) {
-                tvDelay.text       = "Cxl"
+                tvDelay.text       = itemView.context.getString(R.string.status_cxl)
                 tvDelay.visibility = View.VISIBLE
                 tvDelay.setTextColor(ContextCompat.getColor(ctx, R.color.status_cancelled))
             } else {

@@ -222,7 +222,7 @@ class ServerApiClient {
             try {
                 fetchMovements(headcode, uid)
             } catch (e: Exception) {
-                Log.w(TAG, "getMovements error: \${e.message}"); emptyList()
+                Log.w(TAG, "getMovements error: ${e.message}"); emptyList()
             }
         }
 
@@ -347,7 +347,7 @@ class ServerApiClient {
                 if (originCrs.isNotEmpty()) put("origin_crs", originCrs)
                 if (scheduledArr.isNotEmpty()) put("scheduled_arr", scheduledArr)
                 if (destTiploc.isNotEmpty()) put("dest_tiploc", destTiploc)
-                
+
             }
             val raw  = postRaw("/api/hsp/details", body.toString()) ?: return@withContext null
             val json = JSONObject(raw)
@@ -403,7 +403,7 @@ class ServerApiClient {
                     operators   = ops
                 )
             }
-        } catch (e: Exception) { Log.w(TAG, "getKbIncidents: \${e.message}"); emptyList() }
+        } catch (e: Exception) { Log.w(TAG, "getKbIncidents: ${e.message}"); emptyList() }
     }
 
     suspend fun getKbNsi(): List<KbNsiEntry> = withContext(Dispatchers.IO) {
@@ -428,7 +428,7 @@ class ServerApiClient {
                     additionalInfo    = o.optString("additionalInfo")
                 )
             }
-        } catch (e: Exception) { Log.w(TAG, "getKbNsi: \${e.message}"); emptyList() }
+        } catch (e: Exception) { Log.w(TAG, "getKbNsi: ${e.message}"); emptyList() }
     }
 
     suspend fun getKbToc(): List<KbTocEntry> = withContext(Dispatchers.IO) {
@@ -446,7 +446,7 @@ class ServerApiClient {
                     lostPropertyUrl      = o.optString("lostPropertyUrl")
                 )
             }
-        } catch (e: Exception) { Log.w(TAG, "getKbToc: \${e.message}"); emptyList() }
+        } catch (e: Exception) { Log.w(TAG, "getKbToc: ${e.message}"); emptyList() }
     }
 
     suspend fun getKbStation(crs: String): KbStation? = withContext(Dispatchers.IO) {
@@ -470,7 +470,7 @@ class ServerApiClient {
                 busInterchange    = "",
                 carParking        = o.optString("carParking")
             )
-        } catch (e: Exception) { Log.w(TAG, "getKbStation: \${e.message}"); null }
+        } catch (e: Exception) { Log.w(TAG, "getKbStation: ${e.message}"); null }
     }
 
     private fun fetchMovements(headcode: String, uid: String = ""): List<TrustMovement> {
@@ -739,4 +739,3 @@ data class KbTocEntry(
     val assistedTravelUrl: String = "",
     val lostPropertyUrl: String = ""
 )
-

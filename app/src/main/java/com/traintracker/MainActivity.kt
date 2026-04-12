@@ -34,6 +34,7 @@ import com.google.android.material.tabs.TabLayout
 import com.traintracker.databinding.ActivityMainBinding
 import kotlinx.coroutines.launch
 import java.util.Calendar
+import android.view.ViewGroup
 
 class MainActivity : AppCompatActivity() {
 
@@ -311,7 +312,7 @@ class MainActivity : AppCompatActivity() {
             }
         })
         val padding = (16 * resources.displayMetrics.density).toInt()
-        val container = android.widget.FrameLayout(this).apply {
+        val container = FrameLayout(this).apply {
             setPadding(padding, 8, padding, 0)
             addView(input)
         }
@@ -439,7 +440,7 @@ class MainActivity : AppCompatActivity() {
                     .show()
             }
         )
-        binding.chipCallingAt.text = "Unit $unit"
+        binding.chipCallingAt.text = getString(R.string.chip_unit_label, unit)
         binding.chipCallingAt.isChecked = true
     }
 
@@ -617,13 +618,13 @@ class MainActivity : AppCompatActivity() {
                             // Show diagram button and wire it up
                             binding.btnDiagram.visibility = View.VISIBLE
                             binding.btnDiagram.setOnClickListener {
-                                val intent = android.content.Intent(this@MainActivity, UnitDiagramActivity::class.java)
+                                val intent = Intent(this@MainActivity, UnitDiagramActivity::class.java)
                                 intent.putExtra("unit", currentUnit)
                                 startActivity(intent)
                             }
                             if (state.board.services.isEmpty()) {
                                 binding.emptyState.visibility = View.VISIBLE
-                                binding.tvEmptySubtitle.text = "No services found for this unit today."
+                                binding.tvEmptySubtitle.text = getString(R.string.no_services_unit)
                                 adapter.submitList(emptyList())
                             } else {
                                 binding.emptyState.visibility = View.GONE
@@ -667,7 +668,7 @@ class MainActivity : AppCompatActivity() {
                             binding.tvHeader.text          = state.board.stationName
                             if (state.board.services.isEmpty()) {
                                 binding.emptyState.visibility = View.VISIBLE
-                                binding.tvEmptySubtitle.text  = "No services found for this headcode today."
+                                binding.tvEmptySubtitle.text  = getString(R.string.no_services_headcode)
                                 adapter.submitList(emptyList())
                             } else {
                                 binding.emptyState.visibility = View.GONE
@@ -837,7 +838,7 @@ class MainActivity : AppCompatActivity() {
         binding.tvRecentsLabel.visibility   = View.VISIBLE
         binding.chipGroupRecents.visibility = View.VISIBLE
         recents.forEach { recent ->
-            val chip = com.google.android.material.chip.Chip(this).apply {
+            val chip = Chip(this).apply {
                 text = if (recent.name.isNotEmpty() && recent.name != recent.crs)
                     "${recent.name} (${recent.crs})" else recent.crs
                 isCloseIconVisible = true
@@ -881,12 +882,12 @@ class StationAutoCompleteAdapter : BaseAdapter(), Filterable {
     override fun getItem(pos: Int) = items[pos]
     override fun getItemId(pos: Int) = pos.toLong()
 
-    override fun getView(pos: Int, convertView: android.view.View?, parent: android.view.ViewGroup): android.view.View {
+    override fun getView(pos: Int, convertView: View?, parent: ViewGroup): View {
         val tv = (convertView as? TextView) ?: TextView(parent.context).apply {
             setPadding(32, 24, 32, 24)
         }
         val s = items[pos]
-        tv.text = "${s.name} (${s.crs})"
+        tv.text = tv.context.getString(R.string.station_name_crs, s.name, s.crs)
         return tv
     }
 

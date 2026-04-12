@@ -108,11 +108,11 @@ class ServiceDetailActivity : AppCompatActivity() {
         val prevCallingPoints = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU)
             intent.getParcelableArrayListExtra(EXTRA_PREV_CALLING_POINTS, CallingPoint::class.java) ?: emptyList()
         else
-            (@Suppress("DEPRECATION") intent.getParcelableArrayListExtra<CallingPoint>(EXTRA_PREV_CALLING_POINTS)) ?: emptyList()
+            (@Suppress("DEPRECATION") intent.getParcelableArrayListExtra(EXTRA_PREV_CALLING_POINTS)) ?: emptyList()
         val subsCallingPoints = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU)
             intent.getParcelableArrayListExtra(EXTRA_SUBS_CALLING_POINTS, CallingPoint::class.java) ?: emptyList()
         else
-            (@Suppress("DEPRECATION") intent.getParcelableArrayListExtra<CallingPoint>(EXTRA_SUBS_CALLING_POINTS)) ?: emptyList()
+            (@Suppress("DEPRECATION") intent.getParcelableArrayListExtra(EXTRA_SUBS_CALLING_POINTS)) ?: emptyList()
 
         val initialDetails = ServiceDetails(
             generatedAt             = java.time.LocalDateTime.now().toString(),
@@ -424,16 +424,12 @@ class ServiceDetailActivity : AppCompatActivity() {
             binding.tvUnitAllocation.visibility = View.VISIBLE
             binding.tvUnitNumbers.text = if (classTractionLine.isNotEmpty()) unitLine else ""
             binding.tvUnitNumbers.visibility = if (classTractionLine.isNotEmpty() && unitLine.isNotEmpty()) View.VISIBLE else View.GONE
-        } else if (hasCoaches) {
+        } else {
             // No Darwin units yet — just show coach count, no class guessing
             binding.tvUnitAllocationLabel.text = getString(R.string.label_formation)
             binding.tvUnitAllocationLabel.visibility = View.VISIBLE
             binding.tvUnitAllocation.text = resources.getQuantityString(R.plurals.coach_count, coachCount, coachCount)
             binding.tvUnitAllocation.visibility = View.VISIBLE
-            binding.tvUnitNumbers.visibility = View.GONE
-        } else {
-            binding.tvUnitAllocationLabel.visibility = View.GONE
-            binding.tvUnitAllocation.visibility = View.GONE
             binding.tvUnitNumbers.visibility = View.GONE
         }
     }
@@ -613,9 +609,9 @@ class ServiceDetailActivity : AppCompatActivity() {
         val rsidLine = when {
             d.rsid.isNotEmpty() && d.rsid != hc -> buildString {
                 append("RSID: ${d.rsid}")
-                if (coaches != null) append("  ·  ${coaches} coaches")
+                if (coaches != null) append("  ·  $coaches coaches")
             }
-            coaches != null -> "${coaches} coaches"
+            coaches != null -> "$coaches coaches"
             else -> ""
         }
         binding.tvRsid.text = rsidLine
@@ -623,7 +619,7 @@ class ServiceDetailActivity : AppCompatActivity() {
         binding.tvFormation.visibility = View.GONE
 
         // Only seed the unit card from board data if neither the server allocation
-        // nor a Darwin formation has already populated it. Otherwise we'd erase
+        // nor a Darwin formation has already populated it. Otherwise, we'd erase
         // the richer consist data that arrived asynchronously.
         if (viewModel.detailFormation.value == null && viewModel.serverAllocation.value == null) {
             bindUnitInfo(boardUnits, coaches ?: 0)
@@ -675,8 +671,8 @@ class ServiceDetailActivity : AppCompatActivity() {
             d.rsid.isNotEmpty()    -> "\nRSID: ${d.rsid}"
             else                   -> ""
         }
-        val hspStr = viewModel.hspSummary.value?.let {
-            "\nOn-time: ${it.punctualityPct}% (${it.totalRuns} runs)"
+        val hspStr = viewModel.hspSummary.value?.run {
+            "\nOn-time: $punctualityPct% ($totalRuns runs)"
         } ?: ""
         val origin = resolveLocationName(d.origin.ifEmpty { intent.getStringExtra(EXTRA_ORIGIN) ?: "" })
         val shareDest = resolveLocationName(d.destination)

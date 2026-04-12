@@ -292,7 +292,7 @@ class StationBoardActivity : AppCompatActivity() {
                             binding.progressBar.visibility = View.GONE
                             binding.tvError.visibility     = View.GONE
                             if (state.board.services.isEmpty()) {
-                                binding.tvError.text = "No services found"
+                                binding.tvError.text = getString(R.string.board_no_services)
                                 binding.tvError.visibility = View.VISIBLE
                             } else {
                                 adapter.nsiLookup = { code -> viewModel.nsiForOperator(code) }
@@ -303,7 +303,7 @@ class StationBoardActivity : AppCompatActivity() {
                         }
                         is UiState.Error -> {
                             binding.progressBar.visibility = View.GONE
-                            binding.tvError.text = "⚠ ${state.message}"
+                            binding.tvError.text = getString(R.string.board_error_message, state.message)
                             binding.tvError.visibility = View.VISIBLE
                             adapter.submitList(emptyList())
                         }
@@ -503,11 +503,7 @@ class StationBoardActivity : AppCompatActivity() {
                 "${matchingIncident.summary}\n\n${matchingIncident.description}"
             else
                 matchingIncident.summary
-        } else if (entry.statusDescription.isNotEmpty()) {
-            entry.statusDescription
-        } else {
-            entry.statusLabel
-        }
+        } else entry.statusDescription.ifEmpty { entry.statusLabel }
 
         val dialog = AlertDialog.Builder(this)
             .setTitle("${entry.statusEmoji} ${entry.tocName}")

@@ -157,7 +157,7 @@ class UnitDiagramActivity : AppCompatActivity() {
                 }
             } else {
                 // No calling points returned — show origin + dest as stub rows
-                val originCp = com.traintracker.CallingPoint(
+                val originCp = CallingPoint(
                     locationName = s.originCrs?.let { StationData.findByCrs(it)?.name }
                         ?: s.originCrs ?: s.originTiploc,
                     crs          = s.originCrs ?: "",
@@ -168,7 +168,7 @@ class UnitDiagramActivity : AppCompatActivity() {
                     length       = null,
                     platform     = s.platform ?: ""
                 )
-                val destCp = com.traintracker.CallingPoint(
+                val destCp = CallingPoint(
                     locationName = s.destCrs?.let { StationData.findByCrs(it)?.name }
                         ?: s.destCrs ?: s.destTiploc,
                     crs          = s.destCrs ?: "",

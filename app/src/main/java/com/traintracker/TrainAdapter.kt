@@ -18,7 +18,7 @@ class TrainAdapter(
 
     /** Called with an operator code, returns NSI status or null if good/unknown. */
     var nsiLookup: ((String) -> KbNsiEntry?)? = null
-        set(value) { field = value; notifyDataSetChanged() }
+        set(value) { field = value; notifyItemRangeChanged(0, itemCount) }
 
     var tocDetailLookup: ((String) -> KbTocEntry?)? = null
 
@@ -73,19 +73,19 @@ class TrainAdapter(
             b.tvHeadcode.text = s.trainId.ifEmpty { "—" }
 
             // ── Schedule tag ──────────────────────────────────────────────────
-            val tag = s.scheduleTag
-            if (tag != ScheduleTag.WTT) {
-                b.tvScheduleTag.text = tag.label
-                b.tvScheduleTag.background.setTint(when (tag) {
-                    ScheduleTag.CAN   -> colourCancelled
-                    ScheduleTag.VAR   -> colourDelayed
-                    ScheduleTag.BUS   -> 0xFF1565C0.toInt()
-                    ScheduleTag.FERRY -> 0xFF00838F.toInt()
-                    else              -> colourOnTime
-                })
-                b.tvScheduleTag.visibility = View.VISIBLE
-            } else {
-                b.tvScheduleTag.visibility = View.GONE
+            when (s.scheduleTag) {
+                ScheduleTag.WTT -> b.tvScheduleTag.visibility = View.GONE
+                ScheduleTag.CAN, ScheduleTag.VAR, ScheduleTag.BUS, ScheduleTag.FERRY -> {
+                    b.tvScheduleTag.text = s.scheduleTag.label
+                    b.tvScheduleTag.background.setTint(when (s.scheduleTag) {
+                        ScheduleTag.CAN   -> colourCancelled
+                        ScheduleTag.VAR   -> colourDelayed
+                        ScheduleTag.BUS   -> 0xFF1565C0.toInt()
+                        ScheduleTag.FERRY -> 0xFF00838F.toInt()
+                        ScheduleTag.WTT   -> colourOnTime
+                    })
+                    b.tvScheduleTag.visibility = View.VISIBLE
+                }
             }
 
             // ── Category icon + card tint for non-passenger ──────────────────
@@ -95,13 +95,13 @@ class TrainAdapter(
 
             // Tint card background: passing-through services get a grey tint; non-passenger get category tint
             val cardTint = when {
-                s.isServicePassing               -> 0x1A808080.toInt()  // subtle grey — passing through
-                s.category == ServiceCategory.FREIGHT      -> 0x0D8B4513.toInt()
-                s.category == ServiceCategory.ECS          -> 0x0D1565C0.toInt()
-                s.category == ServiceCategory.LIGHT_ENGINE -> 0x0D6A1FA2.toInt()
-                s.category == ServiceCategory.RAILTOUR     -> 0x0DC62828.toInt()
-                s.category == ServiceCategory.SPECIAL      -> 0x0D2E7D32.toInt()
-                else                                       -> 0x00000000.toInt()
+                s.isServicePassing               -> 0x1A808080  // subtle grey — passing through
+                s.category == ServiceCategory.FREIGHT      -> 0x0D8B4513
+                s.category == ServiceCategory.ECS          -> 0x0D1565C0
+                s.category == ServiceCategory.LIGHT_ENGINE -> 0x0D6A1FA2
+                s.category == ServiceCategory.RAILTOUR     -> 0x0DC62828
+                s.category == ServiceCategory.SPECIAL      -> 0x0D2E7D32
+                else                                       -> 0x00000000
             }
             (b.root as? com.google.android.material.card.MaterialCardView)
                 ?.setCardBackgroundColor(cardTint)
@@ -119,10 +119,8 @@ class TrainAdapter(
                     b.tvSubLabel.visibility = if (sub.isNotEmpty()) View.VISIBLE else View.GONE
                 }
                 ServiceCategory.RAILTOUR -> {
-                    b.tvMainLabel.text = if (s.tourName.isNotEmpty()) s.tourName
-                    else if (s.destination.isNotEmpty()) s.destination
-                    else "Railtour"
-                    b.tvSubLabel.text       = "Railtour · ${s.trainId}"
+                    b.tvMainLabel.text = s.tourName.ifEmpty { s.destination.ifEmpty { "Railtour" } }
+                    b.tvSubLabel.text       = b.root.context.getString(R.string.railtour_label, s.trainId)
                     b.tvSubLabel.visibility = View.VISIBLE
                 }
                 ServiceCategory.FREIGHT -> {
@@ -161,7 +159,7 @@ class TrainAdapter(
 
             // ── Punctuality badge ─────────────────────────────────────────────
             if (s.punctualityPercent >= 0) {
-                b.tvPunctuality.text = "${s.punctualityPercent}%"
+                b.tvPunctuality.text = b.root.context.getString(R.string.punctuality_pct_label, s.punctualityPercent)
                 val pctColor = when {
                     s.punctualityPercent >= 90 -> colourOnTime
                     s.punctualityPercent >= 75 -> colourDelayed
@@ -243,7 +241,7 @@ class TrainAdapter(
                 else            -> s.delayMinutes
             }
             if (displayDelay > 0) {
-                b.tvDelay.text = "+${displayDelay}m"
+                b.tvDelay.text = b.root.context.getString(R.string.delay_mins_short, displayDelay)
                 b.tvDelay.visibility = View.GONE
             } else {
                 b.tvDelay.visibility = View.GONE

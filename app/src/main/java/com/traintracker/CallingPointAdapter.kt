@@ -136,7 +136,7 @@ class CallingPointAdapter(
 
             if (isDetailed) {
                 if (pt.delayMinutes > 0 && !stopCancelled && !row.hasPassed) {
-                    b.tvDelayMin.text = "+${pt.delayMinutes}m"
+                    b.tvDelayMin.text = b.root.context.getString(R.string.delay_mins, pt.delayMinutes)
                     b.tvDelayMin.visibility = View.VISIBLE
                 } else {
                     b.tvDelayMin.visibility = View.GONE
@@ -148,13 +148,13 @@ class CallingPointAdapter(
                         b.tvLength.visibility = View.VISIBLE
                     }
                     pt.length != null && pt.length > 0 -> {
-                        b.tvLength.text = "${pt.length} coaches"
+                        b.tvLength.text = b.root.context.getString(R.string.coach_count_label, pt.length)
                         b.tvLength.visibility = View.VISIBLE
                     }
                     else -> b.tvLength.visibility = View.GONE
                 }
                 if (pt.platform.isNotEmpty()) {
-                    b.tvPlatform.text = "Plat ${pt.platform}"
+                    b.tvPlatform.text = b.root.context.getString(R.string.platform_label, pt.platform)
                     b.tvPlatform.visibility = View.VISIBLE
                 } else {
                     b.tvPlatform.visibility = View.GONE
@@ -173,13 +173,13 @@ class CallingPointAdapter(
             } else {
                 b.tvArrDep.visibility = View.GONE
                 if (pt.delayMinutes > 0 && !stopCancelled && !row.hasPassed) {
-                    b.tvDelayMin.text = "+${pt.delayMinutes}m"
+                    b.tvDelayMin.text = b.root.context.getString(R.string.delay_mins, pt.delayMinutes)
                     b.tvDelayMin.visibility = View.VISIBLE
                 } else {
                     b.tvDelayMin.visibility = View.GONE
                 }
                 if (pt.platform.isNotEmpty()) {
-                    b.tvPlatform.text = "Plat ${pt.platform}"
+                    b.tvPlatform.text = b.root.context.getString(R.string.platform_label, pt.platform)
                     b.tvPlatform.visibility = View.VISIBLE
                 } else {
                     b.tvPlatform.visibility = View.GONE
@@ -189,11 +189,11 @@ class CallingPointAdapter(
 
             when {
                 pt.isPassing  -> {
-                    b.tvPassingTag.text = "PASSING"
+                    b.tvPassingTag.text = b.root.context.getString(R.string.status_passing)
                     b.tvPassingTag.visibility = View.VISIBLE
                 }
                 stopCancelled -> {
-                    b.tvPassingTag.text = "NOT CALLING"
+                    b.tvPassingTag.text = b.root.context.getString(R.string.status_not_calling)
                     b.tvPassingTag.visibility = View.VISIBLE
                 }
                 else -> b.tvPassingTag.visibility = View.GONE
@@ -250,7 +250,7 @@ class CallingPointAdapter(
 
         fun bind(row: CallingPointRow) {
             if (row.dividerDelayMins > 0) {
-                b.tvHerDelay.text = "+${row.dividerDelayMins}m late"
+                b.tvHerDelay.text = b.root.context.getString(R.string.divider_delay, row.dividerDelayMins)
                 b.tvHerDelay.visibility = View.VISIBLE
             } else {
                 b.tvHerDelay.visibility = View.GONE

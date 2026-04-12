@@ -108,4 +108,47 @@ Performance data not available (set HSP_USERNAME/PASSWORD)
         <item quantity="one">%d run</item>
         <item quantity="other">%d runs</item>
     </plurals>
+
+    <!-- setText literal fixes -->
+    <string name="status_passing">PASSING</string>
+    <string name="status_not_calling">NOT CALLING</string>
+    <string name="hsp_searching">Searching… first search may take up to a minute</string>
+    <string name="no_services_unit">No services found for this unit today.</string>
+    <string name="no_services_headcode">No services found for this headcode today.</string>
+    <string name="board_no_services">No services found</string>
+    <string name="status_cancelled">Cancelled</string>
+    <string name="status_on_time">On time</string>
+    <string name="status_cxl">Cxl</string>
+    <string name="delay_mins">+%1$dm</string>
+    <string name="coach_count_label">%1$d coaches</string>
+    <string name="platform_label">Plat %1$s</string>
+    <string name="divider_delay">+%1$dm late</string>
+    <string name="hsp_progress">%1$d%% — %2$d services so far…</string>
+    <string name="hsp_status_message">⏳ %1$s</string>
+    <string name="hsp_result_count">%1$d services</string>
+    <string name="hsp_error_message">⚠ %1$s</string>
+    <string name="hsp_service_row">%1$s  %2$s → %3$s</string>
+    <string name="hsp_service_detail">%1$s  ·  %2$s  (%3$d runs)</string>
+    <string name="hsp_detail_dep">%1$s  %2$s</string>
+    <string name="chip_unit_label">Unit %1$s</string>
+    <string name="station_name_crs">%1$s (%2$s)</string>
+    <string name="board_error_message">⚠ %1$s</string>
+    <string name="station_phone">📞 %1$s</string>
+    <string name="station_step_free">♿ Step-free access: %1$s</string>
+    <string name="station_assistance">🤝 Assistance: %1$s</string>
+    <string name="station_wifi">📶 WiFi: %1$s</string>
+    <string name="station_toilets">🚻 Toilets: %1$s</string>
+    <string name="station_waiting">🪑 Waiting room: %1$s</string>
+    <string name="station_cctv">📷 CCTV: %1$s</string>
+    <string name="station_taxi">🚕 Taxi: %1$s</string>
+    <string name="station_bus">🚌 Bus interchange: %1$s</string>
+    <string name="railtour_label">Railtour · %1$s</string>
+    <string name="punctuality_pct_label">%1$d%%</string>
+    <string name="delay_mins_short">+%1$dm</string>
+    <string name="diagram_route">%1$s → %2$s</string>
+    <string name="diagram_delay">+%1$dm</string>
+    <string name="diagram_split">✂  Splits at %1$s  →  %2$s</string>
+    <string name="diagram_delay_cp">+%1$d</string>
+    <string name="toc_no_contact">No contact details available</string>
+    <string name="hsp_unit_header">🚆 %1$s</string>
 </resources>

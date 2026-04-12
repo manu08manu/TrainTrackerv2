@@ -257,7 +257,7 @@ data class TrainService(
     private val effectiveTime: String get() {
         val t = estimatedTime
         val formatted = formatTimeFromIso(t)
-        return if (formatted.isNotEmpty()) formatted else formatTimeFromIso(scheduledTime)
+        return formatted.ifEmpty { formatTimeFromIso(scheduledTime) }
     }
 
     val minutesUntil: Int get() = minutesUntilTime(effectiveTime)
@@ -317,7 +317,7 @@ data class TrainService(
         }
         return when {
             isRailtourHeadcode(h)              -> ServiceCategory.RAILTOUR
-            h.length >= 1 && h[0] in "67"     -> ServiceCategory.FREIGHT
+            h.isNotEmpty() && h[0] in "67"     -> ServiceCategory.FREIGHT
             h.length >= 2 && h[0] == '5'      -> ServiceCategory.ECS
             h.length >= 2 && h[0] == '0'      -> ServiceCategory.LIGHT_ENGINE
             else                               -> ServiceCategory.SPECIAL

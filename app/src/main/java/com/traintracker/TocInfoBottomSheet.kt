@@ -3,7 +3,6 @@ package com.traintracker
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
-import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -165,7 +164,7 @@ class TocInfoBottomSheet : BottomSheetDialogFragment() {
 
         if (body.isEmpty()) {
             body.addView(TextView(ctx).apply {
-                text     = "No contact details available"
+                text     = requireContext().getString(R.string.toc_no_contact)
                 textSize = 13f
                 alpha    = 0.5f
                 setPadding(0, dp(16), 0, dp(16))

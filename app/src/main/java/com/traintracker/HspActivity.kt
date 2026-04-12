@@ -25,7 +25,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Calendar
@@ -66,13 +65,9 @@ class HspViewModel : ViewModel() {
     val detailState: StateFlow<HspState> = _detailState.asStateFlow()
 
     // Remember last search so retry works
-    private var lastFromCrs = ""
-    private var lastToCrs   = ""
-    private var lastDate    = ""
 
     fun search(fromCrs: String, toCrs: String, date: String) {
         if (fromCrs.isBlank() || toCrs.isBlank() || date.isBlank()) return
-        lastFromCrs = fromCrs; lastToCrs = toCrs; lastDate = date
         _state.value = HspState.Loading
         viewModelScope.launch {
             try {
@@ -123,7 +118,6 @@ class HspViewModel : ViewModel() {
         }
     }
 
-    fun retry() = search(lastFromCrs, lastToCrs, lastDate)
 
     fun loadDetails(rid: String, scheduledDep: String = "", originCrs: String = "", scheduledArr: String = "", destTiploc: String = "") {
         _detailState.value = HspState.Loading
@@ -165,7 +159,7 @@ class HspViewModel : ViewModel() {
                         scheduledArr   = actual,
                         originName     = name,
                         destName       = status,
-                        tocName        = if (loc.cancelReason.isNotBlank()) loc.cancelReason else "",
+                        tocName        = loc.cancelReason.ifBlank { "" },
                         punctualityPct = -1,
                         total          = 0
                     )
@@ -350,7 +344,7 @@ class HspActivity : AppCompatActivity() {
                                 binding.progressBar.visibility = View.VISIBLE
                                 binding.tvStatus.visibility    = View.VISIBLE
                                 binding.tvStatus.setTextColor(getColor(android.R.color.darker_gray))
-                                binding.tvStatus.text          = "Searching… first search may take up to a minute"
+                                binding.tvStatus.text          = getString(R.string.hsp_searching)
                                 binding.tvSummary.visibility   = View.GONE
                                 resultsAdapter.submitList(emptyList())
                             }
@@ -358,20 +352,20 @@ class HspActivity : AppCompatActivity() {
                                 binding.progressBar.visibility = View.VISIBLE
                                 binding.tvStatus.visibility    = View.VISIBLE
                                 binding.tvStatus.setTextColor(getColor(android.R.color.darker_gray))
-                                binding.tvStatus.text          = "${state.pct}% — ${state.results.size} services so far…"
+                                binding.tvStatus.text          = getString(R.string.hsp_progress, state.pct, state.results.size)
                                 binding.tvSummary.visibility   = View.GONE
                                 resultsAdapter.submitList(state.results)
                             }
                             is HspState.Pending -> {
                                 binding.progressBar.visibility = View.GONE
                                 binding.tvStatus.setTextColor(getColor(android.R.color.holo_orange_dark))
-                                binding.tvStatus.text          = "⏳ ${state.message}"
+                                binding.tvStatus.text          = getString(R.string.hsp_status_message, state.message)
                                 binding.tvStatus.visibility    = View.VISIBLE
                             }
                             is HspState.Success -> {
                                 binding.progressBar.visibility = View.GONE
                                 binding.tvStatus.visibility    = View.GONE
-                                binding.tvSummary.text         = "${state.results.size} services"
+                                binding.tvSummary.text         = getString(R.string.hsp_result_count, state.results.size)
                                 binding.tvSummary.visibility   = View.VISIBLE
                                 resultsAdapter.submitList(state.results)
                             }
@@ -379,7 +373,7 @@ class HspActivity : AppCompatActivity() {
                             is HspState.Error -> {
                                 binding.progressBar.visibility = View.GONE
                                 binding.tvStatus.setTextColor(getColor(android.R.color.holo_red_dark))
-                                binding.tvStatus.text          = "⚠ ${state.message}"
+                                binding.tvStatus.text          = getString(R.string.hsp_error_message, state.message)
                                 binding.tvStatus.visibility    = View.VISIBLE
                                 resultsAdapter.submitList(emptyList())
                             }
@@ -462,15 +456,16 @@ class HspActivity : AppCompatActivity() {
 
 class HspResultsAdapter(
     private val onTap: (HspServiceRow) -> Unit
-) : RecyclerView.Adapter<HspResultsAdapter.VH>() {
+) : androidx.recyclerview.widget.ListAdapter<HspServiceRow, HspResultsAdapter.VH>(DIFF) {
 
-    private val items = mutableListOf<HspServiceRow>()
-
-    fun submitList(list: List<HspServiceRow>) {
-        items.clear(); items.addAll(list); notifyDataSetChanged()
+    companion object {
+        private val DIFF = object : androidx.recyclerview.widget.DiffUtil.ItemCallback<HspServiceRow>() {
+            override fun areItemsTheSame(a: HspServiceRow, b: HspServiceRow) = a.rid == b.rid && a.scheduledDep == b.scheduledDep
+            override fun areContentsTheSame(a: HspServiceRow, b: HspServiceRow) = a == b
+        }
     }
 
-    override fun getItemCount() = items.size
+    override fun getItemCount() = currentList.size
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
         val v = LayoutInflater.from(parent.context).inflate(android.R.layout.two_line_list_item, parent, false)
@@ -478,11 +473,11 @@ class HspResultsAdapter(
     }
 
     override fun onBindViewHolder(holder: VH, position: Int) {
-        val row = items[position]
+        val row = currentList[position]
         val time = row.scheduledDep.ifEmpty { row.scheduledArr }
         val pct  = if (row.punctualityPct >= 0) "${row.punctualityPct}% on time" else "No data"
-        holder.text1.text = "$time  ${row.originName} → ${row.destName}"
-        holder.text2.text = "${row.tocName}  ·  $pct  (${row.total} runs)"
+        holder.text1.text = holder.itemView.context.getString(R.string.hsp_service_row, time, row.originName, row.destName)
+        holder.text2.text = holder.itemView.context.getString(R.string.hsp_service_detail, row.tocName, pct, row.total)
         holder.itemView.setOnClickListener { onTap(row) }
     }
 
@@ -507,7 +502,7 @@ class HspDetailAdapter(
 
     override fun onBindViewHolder(holder: VH, position: Int) {
         val row = items[position]
-        holder.text1.text = "${row.scheduledDep.padEnd(5)}  ${row.originName}"
+        holder.text1.text = holder.itemView.context.getString(R.string.hsp_detail_dep, row.scheduledDep.padEnd(5), row.originName)
         holder.text2.text = row.destName
         val colour = when {
             row.destName.contains("+")         -> 0xFFE65100.toInt()

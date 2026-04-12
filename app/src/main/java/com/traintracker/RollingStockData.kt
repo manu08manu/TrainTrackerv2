@@ -70,17 +70,6 @@ object RollingStockData {
         )
     }
 
-    fun shortLabel(units: List<String>): String {
-        if (units.isEmpty()) return ""
-        val info = infoFromUnit(units.first()) ?: run {
-            val cls = classFromUnit(units.first())
-            return if (cls != null) "Class $cls" else ""
-        }
-        return info.name.removePrefix("Class ").let { n ->
-            if (n.contains(" ")) n else "Class $n"
-        }
-    }
-
     // ─── Full class database ─────────────────────────────────────────────────
 
     private val classInfoMap: Map<Int, ClassInfo> = mapOf(
@@ -213,11 +202,10 @@ object RollingStockData {
         805 to ClassInfo("Class 805",                  "Bi-mode", topSpeed = 125, introduced = 2023, operator = "VT"),
         806 to ClassInfo("Class 806",                  "EMU",     topSpeed = 125, introduced = 2024, operator = "VT"),
         807 to ClassInfo("Class 807 Evero",            "Bi-mode", topSpeed = 125, introduced = 2023, operator = "XC"),
-        810 to ClassInfo("Class 810",                  "Bi-mode", topSpeed = 125, introduced = 2023, operator = "EM"),
+        810 to ClassInfo("Class 810 Aurora",           "Bi-mode", topSpeed = 125, introduced = 2023, operator = "EM"),
 
         // ── HST coaching stock ────────────────────────────────────────────────
         254 to ClassInfo("HST Mk3 trailer",            "HST",  notes = "InterCity 125 trailer"),
     )
 
-    val allClassNumbers: Set<Int> get() = classInfoMap.keys
 }
