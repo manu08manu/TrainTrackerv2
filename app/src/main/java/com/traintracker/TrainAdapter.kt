@@ -129,6 +129,11 @@ class TrainAdapter(
                     b.tvSubLabel.text       = if (dest.isNotEmpty() && dest != s.trainId) "To $dest" else s.serviceTypeLabel
                     b.tvSubLabel.visibility = View.VISIBLE
                 }
+                ServiceCategory.BUS -> {
+                    b.tvMainLabel.text      = s.destination.ifEmpty { "Bus Replacement" }
+                    b.tvSubLabel.text       = "Bus replacement"
+                    b.tvSubLabel.visibility = View.VISIBLE
+                }
                 else -> {
                     b.tvMainLabel.text = buildString {
                         append(when (s.category) {
@@ -298,6 +303,32 @@ class TrainAdapter(
             } else ""
             b.tvSplitInfo.text       = splitLine
             b.tvSplitInfo.visibility = if (splitLine.isNotEmpty()) View.VISIBLE else View.GONE
+            b.tvSplitInfo.setOnClickListener {
+                if (s.splitToUid.isNotEmpty()) {
+                    val intent = android.content.Intent(ctx, ServiceDetailActivity::class.java).apply {
+                        putExtra("serviceId", s.splitToUid)
+                        putExtra("headcode", s.splitToHeadcode)
+                    }
+                    ctx.startActivity(intent)
+                }
+            }
+            b.tvSplitInfo.setOnLongClickListener {
+                if (s.splitToHeadcode.isNotEmpty()) {
+                    val intent = android.content.Intent(ctx, StationBoardActivity::class.java).apply {
+                        putExtra("headcode", s.splitToHeadcode)
+                    }
+                    ctx.startActivity(intent)
+                    true
+                } else false
+            }
+
+            // Coupling info
+            val couplingLine = if (s.coupledFromHeadcode.isNotEmpty()) {
+                val at = s.couplingTiplocName.ifEmpty { s.couplingTiploc }.ifEmpty { "?" }
+                "🔗 Joins with ${s.coupledFromHeadcode} at $at"
+            } else ""
+            b.tvCouplingInfo.text       = couplingLine
+            b.tvCouplingInfo.visibility = if (couplingLine.isNotEmpty()) View.VISIBLE else View.GONE
 
             // Forms next service
             val formsLine = if (s.formsHeadcode.isNotEmpty()) "→ Forms ${s.formsHeadcode}" else ""

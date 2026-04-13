@@ -210,9 +210,10 @@ class ServerApiClient {
             try {
                 val json = get("/api/service/$uid?crs=$atCrs") ?: return@withContext null
                 CallingPointsResult(
-                    uid        = json.optString("uid"),
-                    previous   = parseCallingPoints(json.optJSONArray("previous")),
-                    subsequent = parseCallingPoints(json.optJSONArray("subsequent"))
+                    uid         = json.optString("uid"),
+                    previous    = parseCallingPoints(json.optJSONArray("previous")),
+                    subsequent  = parseCallingPoints(json.optJSONArray("subsequent")),
+                    serviceType = json.optString("serviceType", "NORMAL")
                 )
             } catch (_: Exception) { null }
         }
@@ -230,7 +231,7 @@ class ServerApiClient {
         withContext(Dispatchers.IO) {
             try {
                 // Prefer UID endpoint — queries both current and history tables precisely
-                val url = if (uid.isNotEmpty()) "/api/allocation/uid/$uid" else "/api/allocation/$headcode?date=$date"
+                val url = if (uid.isNotEmpty()) "/api/allocation/uid/$uid?date=$date" else "/api/allocation/$headcode?date=$date"
                 Log.d(TAG, "getAllocation: fetching $baseUrl$url (uid=$uid)")
 
                 val raw = getRaw(url)
@@ -523,6 +524,7 @@ class ServerApiClient {
                 splitTiploc        = s.safeString("splitTiploc"),
                 splitTiplocName    = s.safeString("splitTiplocName"),
                 splitToHeadcode    = s.safeString("splitToHeadcode"),
+                splitToUid         = s.safeString("splitToUid"),
                 couplingTiploc     = s.safeString("couplingTiploc"),
                 couplingTiplocName = s.safeString("couplingTiplocName"),
                 coupledFromHeadcode = s.safeString("coupledFromHeadcode"),
@@ -599,6 +601,7 @@ data class ServerService(
     val splitTiploc: String = "",
     val splitTiplocName: String = "",
     val splitToHeadcode: String = "",
+    val splitToUid: String = "",
     val couplingTiploc: String = "",
     val couplingTiplocName: String = "",
     val coupledFromHeadcode: String = "",
@@ -609,7 +612,8 @@ data class ServerService(
 data class CallingPointsResult(
     val uid: String,
     val previous: List<CallingPoint>,
-    val subsequent: List<CallingPoint>
+    val subsequent: List<CallingPoint>,
+    val serviceType: String = "NORMAL"
 )
 
 data class AllocationInfo(

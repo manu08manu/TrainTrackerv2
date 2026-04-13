@@ -380,7 +380,10 @@ class MainViewModel : ViewModel() {
             serviceID        = s.uid,
             trainId          = existing?.trainId?.ifEmpty { h } ?: h,
             boardType        = bType,
-            serviceType      = "train",
+            serviceType      = when {
+                h.startsWith("0B") || h.startsWith("0C") -> "bus"
+                else -> "train"
+            },
             isPassenger      = true,
             isServicePassing = s.isPass,
             actualDeparture  = actualDep,
@@ -398,6 +401,7 @@ class MainViewModel : ViewModel() {
             splitTiploc          = s.splitTiploc,
             splitTiplocName      = s.splitTiplocName,
             splitToHeadcode      = s.splitToHeadcode,
+            splitToUid           = s.splitToUid,
             couplingTiploc       = s.couplingTiploc,
             couplingTiplocName   = s.couplingTiplocName,
             coupledFromHeadcode  = s.coupledFromHeadcode,
@@ -571,6 +575,12 @@ class MainViewModel : ViewModel() {
                     }
 
                     fallback.copy(
+                        isCancelled             = false,
+                        serviceType             = when (serverResult.serviceType) {
+                            "BUS_REPLACEMENT"   -> "bus"
+                            "COACH_REPLACEMENT" -> "bus"
+                            else                -> fallback.serviceType
+                        },
                         previousCallingPoints   = overlayActuals(
                             serverResult.previous.ifEmpty { fallback.previousCallingPoints }
                         ),

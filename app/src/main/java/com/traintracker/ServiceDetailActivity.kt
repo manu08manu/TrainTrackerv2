@@ -25,6 +25,8 @@ class ServiceDetailActivity : AppCompatActivity() {
     private var callingAdapter: CallingPointAdapter? = null
     private var cachedDetails: ServiceDetails? = null
     private var queryCrs      = ""
+    private var splitTiploc     = ""
+    private var splitToHeadcode = ""
     private var trainHeadcode = ""
     private var destCrs       = ""   // for HSP lookup
 
@@ -52,6 +54,8 @@ class ServiceDetailActivity : AppCompatActivity() {
         private const val EXTRA_CANCEL_REASON  = "cancel_reason"
         private const val EXTRA_IS_PASSING          = "is_passing"
         private const val EXTRA_PLATFORM            = "platform"
+        private const val EXTRA_SPLIT_TIPLOC        = "split_tiploc_crs"
+        private const val EXTRA_SPLIT_HEADCODE      = "split_headcode"
 
         fun start(ctx: Context, serviceId: String, headcode: String,
                   origin: String, destination: String, std: String, etd: String = "",
@@ -62,7 +66,9 @@ class ServiceDetailActivity : AppCompatActivity() {
                   isPassingService: Boolean = false,
                   platform: String = "",
                   isCancelled: Boolean = false,
-                  cancelReason: String = "") {
+                  cancelReason: String = "",
+                  splitTiploc: String = "",
+                  splitToHeadcode: String = "") {
             ctx.startActivity(Intent(ctx, ServiceDetailActivity::class.java).apply {
                 putExtra(EXTRA_SERVICE_ID, serviceId)
                 putExtra(EXTRA_HEADCODE,   headcode)
@@ -80,6 +86,8 @@ class ServiceDetailActivity : AppCompatActivity() {
                 putExtra(EXTRA_PLATFORM,   platform)
                 putExtra(EXTRA_IS_CANCELLED, isCancelled)
                 putExtra(EXTRA_CANCEL_REASON, cancelReason)
+                putExtra(EXTRA_SPLIT_TIPLOC, splitTiploc)
+                putExtra(EXTRA_SPLIT_HEADCODE, splitToHeadcode)
             })
         }
     }
@@ -99,6 +107,8 @@ class ServiceDetailActivity : AppCompatActivity() {
         val origin       = intent.getStringExtra(EXTRA_ORIGIN)   ?: ""
         val dest         = resolveLocationName(intent.getStringExtra(EXTRA_DEST) ?: "")
         queryCrs         = intent.getStringExtra(EXTRA_QUERY_CRS) ?: ""
+        splitTiploc      = intent.getStringExtra(EXTRA_SPLIT_TIPLOC) ?: ""
+        splitToHeadcode  = intent.getStringExtra(EXTRA_SPLIT_HEADCODE) ?: ""
         destCrs          = intent.getStringExtra(EXTRA_DEST_CRS)  ?: ""
         val boardUnits   = intent.getStringArrayListExtra(EXTRA_UNITS) ?: emptyList()
         // Cap at 20 — formation data can occasionally have bad values
@@ -242,7 +252,12 @@ class ServiceDetailActivity : AppCompatActivity() {
                             // Preserve board-level cancellation if server doesn't know yet
                             val boardCancelled = intent.getBooleanExtra(EXTRA_IS_CANCELLED, false)
                             val boardCancelReason = intent.getStringExtra(EXTRA_CANCEL_REASON) ?: ""
-                            var mergedDetails = if (boardCancelled && !state.details.isCancelled)
+                            // Only propagate board-level cancellation if the service has no
+                            // calling points at all (server has no data) — otherwise trust the
+                            // per-stop isCancelled flags from the service endpoint
+                            val serverHasData = state.details.cifSubsequentCallingPoints.isNotEmpty()
+                                || state.details.subsequentCallingPoints.isNotEmpty()
+                            var mergedDetails = if (boardCancelled && !state.details.isCancelled && !serverHasData)
                                 state.details.copy(isCancelled = true) else state.details
                             // Use board cancel reason if service detail doesn't have one
                             if (mergedDetails.cancelReason.isEmpty() && boardCancelReason.isNotEmpty()) {
@@ -486,7 +501,6 @@ class ServiceDetailActivity : AppCompatActivity() {
                 },
                 platform    = updatedPlatform ?: pt.platform,
                 isCancelled = isCancelledStop || pt.isCancelled || live.isCancelled
-                        || intent.getBooleanExtra(EXTRA_IS_CANCELLED, false)
             )
         }
 
@@ -509,7 +523,9 @@ class ServiceDetailActivity : AppCompatActivity() {
                 highlightCrs   = queryCrs,
                 showPassing    = showPassing,
                 showDetailed   = showDetailed,
-                onStationClick = { pt -> StationBoardActivity.start(this, pt.crs, pt.locationName) }
+                onStationClick = { pt -> StationBoardActivity.start(this, pt.crs, pt.locationName) },
+                splitTiploc    = splitTiploc,
+                splitToHeadcode = splitToHeadcode
             )
             binding.rvCallingPoints.adapter = callingAdapter
         }
@@ -523,12 +539,22 @@ class ServiceDetailActivity : AppCompatActivity() {
         )
 
         // Show/hide overall cancellation banner
-        val allSubsCanc = d.subsequentCallingPoints.isNotEmpty() &&
-                d.subsequentCallingPoints.all {
+        // Prefer CIF points (full route) over board points (may only cover part of route)
+        val subsForCanc = d.cifSubsequentCallingPoints.ifEmpty { d.subsequentCallingPoints }
+        val allSubsCanc = subsForCanc.isNotEmpty() &&
+                subsForCanc.all {
                     it.isCancelled || it.et.equals("Cancelled", ignoreCase = true)
                 }
+        val someSubsCanc = !allSubsCanc && subsForCanc.any {
+                    it.isCancelled || it.et.equals("Cancelled", ignoreCase = true)
+                }
+        val partialCanc1 = !live.isCancelled && !d.isCancelled && someSubsCanc
+        binding.tvCancelledBanner.text = getString(
+            if (partialCanc1) R.string.service_partially_cancelled_banner
+            else R.string.service_cancelled_banner
+        )
         binding.tvCancelledBanner.visibility =
-            if (live.isCancelled || d.isCancelled || allSubsCanc) View.VISIBLE else View.GONE
+            if (live.isCancelled || d.isCancelled || allSubsCanc || someSubsCanc) View.VISIBLE else View.GONE
     }
 
     private fun buildPointList(d: ServiceDetails): List<CallingPoint> {
@@ -653,8 +679,16 @@ class ServiceDetailActivity : AppCompatActivity() {
                 && d.subsequentCallingPoints.all {
             it.isCancelled || it.et.equals("Cancelled", ignoreCase = true)
         }
+        val someSubsCanc = !allSubsCanc && d.subsequentCallingPoints.any {
+            it.isCancelled || it.et.equals("Cancelled", ignoreCase = true)
+        }
+        val partialCanc2 = !d.isCancelled && someSubsCanc
+        binding.tvCancelledBanner.text = getString(
+            if (partialCanc2) R.string.service_partially_cancelled_banner
+            else R.string.service_cancelled_banner
+        )
         binding.tvCancelledBanner.visibility =
-            if (d.isCancelled || allSubsCanc) View.VISIBLE else View.GONE
+            if (d.isCancelled || allSubsCanc || someSubsCanc) View.VISIBLE else View.GONE
     }
 
     // ── Share ─────────────────────────────────────────────────────────────────

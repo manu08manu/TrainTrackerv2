@@ -265,12 +265,30 @@
                 android:id="@+id/tvSplitInfo"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textSize="10sp"
-                android:textColor="?attr/colorOnSurfaceVariant"
-                android:layout_marginTop="3dp"
+                android:textSize="11sp"
+                android:textColor="#FF6D00"
+                android:textStyle="bold"
+                android:layout_marginTop="4dp"
                 android:drawablePadding="4dp"
+                android:background="?attr/selectableItemBackground"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
                 android:visibility="gone"/>
 
+            <!-- ── Row 4b: Coupling info ──────────────────────────────────── -->
+            <TextView
+                android:id="@+id/tvCouplingInfo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="11sp"
+                android:textColor="#1565C0"
+                android:textStyle="bold"
+                android:layout_marginTop="4dp"
+                android:drawablePadding="4dp"
+                android:background="?attr/selectableItemBackground"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
+                android:visibility="gone"/>
             <!-- ── Row 5: Forms next service (unit board only) ─────────────── -->
             <TextView
                 android:id="@+id/tvFormsNext"

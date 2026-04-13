@@ -9,7 +9,8 @@
     <string name="btn_search">Search</string>
     <string name="label_favourites">Favourites:</string>
     <string name="show_freight">Not in normal passenger service</string>
-    <string name="service_cancelled_banner">⚠ This service is CANCELED</string>
+    <string name="service_cancelled_banner">⚠ This service is CANCELLED</string>
+    <string name="service_partially_cancelled_banner">⚠ This service is PARTIALLY CANCELLED</string>
     <string name="label_calling_points">Calling points</string>
     <string name="btn_simple">Simple</string>
     <string name="btn_detailed">Detailed</string>

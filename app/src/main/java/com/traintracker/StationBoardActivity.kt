@@ -176,7 +176,9 @@ class StationBoardActivity : AppCompatActivity() {
                     isPassingService        = service.isServicePassing,
                     platform    = service.platform,
                     isCancelled = service.isCancelled,
-                    cancelReason = service.cancelReason
+                    cancelReason = service.cancelReason,
+                    splitTiploc = service.splitTiplocName.ifEmpty { service.splitTiploc },
+                    splitToHeadcode = service.splitToHeadcode
                 )
             }
         )
@@ -469,7 +471,7 @@ class StationBoardActivity : AppCompatActivity() {
                         }
 
                         // Compact label: "TOC name · Advisory" etc, detail shown on tap
-                        val chipLabel = "${entry.statusEmoji} ${entry.tocName} · ${entry.statusLabel}"
+                        val chipLabel = "${entry.statusEmoji} ${entry.tocName} · ${entry.statusLabel}".replace("\n", " ").replace("\r", " ").trim()
 
                         val chip = Chip(this@StationBoardActivity).apply {
                             text = chipLabel

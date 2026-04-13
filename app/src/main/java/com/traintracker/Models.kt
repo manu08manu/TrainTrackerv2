@@ -231,6 +231,7 @@ data class TrainService(
     val splitTiploc: String = "",
     val splitTiplocName: String = "",
     val splitToHeadcode: String = "",
+    val splitToUid: String = "",
     val couplingTiploc: String = "",
     val couplingTiplocName: String = "",
     val coupledFromHeadcode: String = "",

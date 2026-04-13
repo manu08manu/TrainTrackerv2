@@ -43,7 +43,9 @@ class CallingPointAdapter(
     private val highlightCrs: String = "",
     var showPassing: Boolean = false,
     var showDetailed: Boolean = false,
-    private val onStationClick: ((CallingPoint) -> Unit)? = null
+    private val onStationClick: ((CallingPoint) -> Unit)? = null,
+    private val splitTiploc: String = "",
+    private val splitToHeadcode: String = ""
 ) : ListAdapter<CallingPointRow, RecyclerView.ViewHolder>(DIFF) {
 
     private var colourOnSurface = 0
@@ -152,6 +154,14 @@ class CallingPointAdapter(
                         b.tvLength.visibility = View.VISIBLE
                     }
                     else -> b.tvLength.visibility = View.GONE
+                }
+                // Branch split indicator
+                val isSplitStation = splitTiploc.isNotEmpty() && pt.crs == splitTiploc && splitToHeadcode.isNotEmpty()
+                if (isSplitStation) {
+                    b.layoutSplitBranch.visibility = View.VISIBLE
+                    b.tvSplitNote.text = splitToHeadcode
+                } else {
+                    b.layoutSplitBranch.visibility = View.GONE
                 }
                 if (pt.platform.isNotEmpty()) {
                     b.tvPlatform.text = b.root.context.getString(R.string.platform_label, pt.platform)
@@ -353,6 +363,8 @@ class CallingPointAdapter(
                 .firstOrNull { (it ?: 0) > 0 }
             val thisLength = pt.length?.takeIf { it > 0 }
             val note: String? = when {
+                splitTiploc.isNotEmpty() && pt.crs == splitTiploc && splitToHeadcode.isNotEmpty() ->
+                    "✂ Splits here · $splitToHeadcode continues"
                 prevLength != null && thisLength != null && prevLength > thisLength ->
                     "⚡ Train divides · $thisLength coaches continue"
                 prevLength != null && thisLength != null && prevLength < thisLength ->

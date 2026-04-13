@@ -126,7 +126,9 @@ class MainActivity : AppCompatActivity() {
                     isPassingService = service.isServicePassing,
                     platform    = service.platform,
                     isCancelled = service.isCancelled,
-                    cancelReason = service.cancelReason
+                    cancelReason = service.cancelReason,
+                    splitTiploc = service.splitTiplocName.ifEmpty { service.splitTiploc },
+                    splitToHeadcode = service.splitToHeadcode
                 )
             }
         )
