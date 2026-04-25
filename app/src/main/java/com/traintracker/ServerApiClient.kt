@@ -107,7 +107,6 @@ class ServerApiClient {
     val movements: SharedFlow<TrustMovement> = _movements
 
     private val _connected = MutableSharedFlow<Boolean>(replay = 1)
-    val connected: SharedFlow<Boolean> = _connected
 
     suspend fun pollTrustForHeadcode(headcode: String) {
         if (!isEnabled || headcode.isEmpty()) return
@@ -130,16 +129,6 @@ class ServerApiClient {
             } catch (_: Exception) { headcode }
         }
 
-    /**
-     * Finds which station a headcode is currently at (or last seen at).
-     * Returns a CRS code, or null if the headcode can't be located.
-     */
-    suspend fun findHeadcodeStation(headcode: String): String? =
-        withContext(Dispatchers.IO) {
-            try {
-                get("/api/trust/locate/$headcode")?.safeString("crs")?.ifEmpty { null }
-            } catch (_: Exception) { null }
-        }
 
     suspend fun getDepartures(crs: String, windowMinutes: Int = 120, offset: Int = 0): List<ServerService> =
         withContext(Dispatchers.IO) {

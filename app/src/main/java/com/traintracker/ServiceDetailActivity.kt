@@ -625,7 +625,7 @@ class ServiceDetailActivity : AppCompatActivity() {
                 couplingTiplocCrs = couplingTiplocVar,
                 coupledFromHc     = coupledFromHcVar,
                 onSplitClick      = { headcode, uid ->
-                    ServiceDetailActivity.start(
+                    start(
                         ctx             = this,
                         serviceId       = uid,
                         headcode        = headcode,
@@ -817,17 +817,6 @@ class ServiceDetailActivity : AppCompatActivity() {
             val splitIdx = allRoute.indexOfFirst { it.crs == splitTiploc }
             val beforeLen = if (splitIdx > 0) allRoute.subList(0, splitIdx).lastOrNull { (it.length ?: 0) > 0 }?.length else null
             val afterLen  = if (splitIdx >= 0) allRoute.subList(splitIdx, allRoute.size).firstOrNull { (it.length ?: 0) > 0 }?.length else null
-            val splitLine = if (beforeLen != null && afterLen != null && beforeLen != afterLen) {
-                val mainDest = d.destination
-                val splitDest = splitToDestName.ifEmpty { splitToHeadcode }
-                "$afterLen coaches → $mainDest\n${beforeLen - afterLen} coaches → $splitDest"
-            } else {
-                buildString {
-                    append("✂ Splits at $splitStationName")
-                    if (splitToDestName.isNotEmpty()) append(" · $splitToHeadcode → $splitToDestName")
-                    else if (splitToHeadcode.isNotEmpty()) append(" · $splitToHeadcode continues")
-                }
-            }
             binding.cardUnitHsp.visibility = View.VISIBLE
             binding.tvSplitInfo.visibility = View.GONE
         } else {
@@ -843,11 +832,11 @@ class ServiceDetailActivity : AppCompatActivity() {
             binding.cardUnitHsp.visibility = View.VISIBLE
             val couplingAssocType = intent.getStringExtra(EXTRA_COUPLING_ASSOC_TYPE) ?: ""
             val formedLabel = if (couplingAssocType == "NP" || couplingAssocType == "JJ") "Joins with" else "Formed from"
-            binding.tvSplitInfo.text = "$formedLabel $coupledFromHc at $stationName"
+            binding.tvSplitInfo.text = getString(R.string.coupling_formed_from, formedLabel, coupledFromHc, stationName)
             binding.tvSplitInfo.visibility = View.VISIBLE
             if (coupledFromUid.isNotEmpty()) {
                 binding.tvSplitInfo.setOnClickListener {
-                    ServiceDetailActivity.start(
+                    start(
                         ctx         = this,
                         serviceId   = coupledFromUid,
                         headcode    = coupledFromHc,

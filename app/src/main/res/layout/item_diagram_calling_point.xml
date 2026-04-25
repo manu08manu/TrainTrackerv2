@@ -94,7 +94,7 @@
         android:id="@+id/tvDelay"
         android:layout_width="36dp"
         android:layout_height="wrap_content"
-        android:textSize="10sp"
+        android:textSize="11sp"
         android:textStyle="bold"
         android:gravity="center"
         android:visibility="invisible"/>

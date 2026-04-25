@@ -10,7 +10,7 @@
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
-        android:background="?attr/colorPrimary"
+        android:background="?attr/colorPrimaryContainer"
         android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"/>
 
     <com.google.android.material.tabs.TabLayout
@@ -18,7 +18,10 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         app:tabGravity="fill"
-        app:tabMode="fixed"/>
+        app:tabMode="fixed"
+        app:tabTextColor="?attr/colorOnSurface"
+        app:tabSelectedTextColor="?attr/colorPrimary"
+        app:tabIndicatorColor="?attr/colorPrimary"/>
 
     <!-- Headcode search row -->
     <LinearLayout
@@ -35,13 +38,14 @@
             android:layout_width="0dp"
             android:layout_height="36dp"
             android:layout_weight="1"
-            android:hint="Headcode e.g. 1A34, 6M21"
+            android:hint="@string/hint_headcode"
             android:inputType="text"
             android:maxLines="1"
             android:textSize="13sp"
             android:paddingHorizontal="10dp"
             android:background="@drawable/bg_delay_reason"
             android:imeOptions="actionSearch"
+            android:autofillHints="no"
             android:textColor="?attr/colorOnSurface"
             android:textColorHint="?attr/colorOnSurfaceVariant"/>
 
@@ -50,7 +54,7 @@
             style="@style/Widget.Material3.Chip.Input"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Filter active"
+            android:text="@string/chip_filter_active"
             app:chipBackgroundColor="@color/chip_bg_selector"
             app:closeIconVisible="true"
             android:textSize="12sp"

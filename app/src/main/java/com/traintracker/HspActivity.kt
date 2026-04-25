@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Calendar
+import com.google.android.material.R as MaterialR
 
 // ─── ViewModel ────────────────────────────────────────────────────────────────
 
@@ -221,8 +222,8 @@ class HspActivity : AppCompatActivity() {
             selectedDate = it.getString("selectedDate", "")
             val fromName = it.getString("fromName", "")
             val toName   = it.getString("toName", "")
-            if (fromName.isNotEmpty()) binding.btnFromStation.text = fromName
-            if (toName.isNotEmpty())   binding.btnToStation.text   = toName
+            if (fromName.isNotEmpty()) binding.tvFromStation.text = fromName
+            if (toName.isNotEmpty())   binding.tvToStation.text   = toName
         }
 
         observeState()
@@ -232,7 +233,7 @@ class HspActivity : AppCompatActivity() {
         selectedDate = "%04d-%02d-%02d".format(
             cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH)
         )
-        binding.btnDate.text = formatHistoricDate(selectedDate)
+        binding.tvDate.text = formatHistoricDate(selectedDate)
     }
 
     override fun onSupportNavigateUp(): Boolean { finish(); return true }
@@ -244,9 +245,9 @@ class HspActivity : AppCompatActivity() {
         binding.btnToStation.setOnClickListener   { showStationPicker(isFrom = false) }
         binding.btnSwapStations.setOnClickListener {
             val tmpCrs  = fromCrs;  fromCrs  = toCrs;  toCrs  = tmpCrs
-            val tmpText = binding.btnFromStation.text
-            binding.btnFromStation.text = binding.btnToStation.text
-            binding.btnToStation.text   = tmpText
+            val tmpText = binding.tvFromStation.text
+            binding.tvFromStation.text = binding.tvToStation.text
+            binding.tvToStation.text   = tmpText
         }
         binding.btnSearch.setOnClickListener { doSearch() }
     }
@@ -290,10 +291,10 @@ class HspActivity : AppCompatActivity() {
                 if (crs.isEmpty()) { toast("Please select a station from the list"); return@setPositiveButton }
                 if (isFrom) {
                     fromCrs = crs
-                    binding.btnFromStation.text = name
+                    binding.tvFromStation.text = name
                 } else {
                     toCrs = crs
-                    binding.btnToStation.text = name
+                    binding.tvToStation.text = name
                 }
             }
             .setNegativeButton("Cancel", null)
@@ -309,7 +310,7 @@ class HspActivity : AppCompatActivity() {
                 this,
                 { _, year, month, day ->
                     selectedDate = "%04d-%02d-%02d".format(year, month + 1, day)
-                    binding.btnDate.text = formatHistoricDate(selectedDate)
+                    binding.tvDate.text = formatHistoricDate(selectedDate)
                 },
                 parts[0], parts[1] - 1, parts[2]
             )
@@ -337,8 +338,8 @@ class HspActivity : AppCompatActivity() {
         outState.putString("fromCrs", fromCrs)
         outState.putString("toCrs", toCrs)
         outState.putString("selectedDate", selectedDate)
-        outState.putString("fromName", binding.btnFromStation.text.toString())
-        outState.putString("toName", binding.btnToStation.text.toString())
+        outState.putString("fromName", binding.tvFromStation.text.toString())
+        outState.putString("toName", binding.tvToStation.text.toString())
     }
 
     // ─── Search ───────────────────────────────────────────────────────────────
@@ -446,9 +447,9 @@ class HspActivity : AppCompatActivity() {
         // Unit header — only shown when we have allocation data
         if (unitSummary.isNotEmpty()) {
             val unitHeader = TextView(this).apply {
-                text = "🚆 $unitSummary"
+                text = context.getString(R.string.unit_summary_label, unitSummary)
                 setPadding(48, 24, 48, 16)
-                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium)
+                setTextAppearance(MaterialR.style.TextAppearance_Material3_BodyMedium)
                 setBackgroundColor(0xFFF3F3F3.toInt())
             }
             container.addView(unitHeader)

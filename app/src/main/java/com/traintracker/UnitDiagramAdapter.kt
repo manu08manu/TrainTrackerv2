@@ -69,7 +69,7 @@ class UnitDiagramAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     // ── Service Header ViewHolder ─────────────────────────────────────────────
 
-    inner class ServiceHeaderVH(view: View) : RecyclerView.ViewHolder(view) {
+    class ServiceHeaderVH(view: View) : RecyclerView.ViewHolder(view) {
         private val gap       = view.findViewById<View>(R.id.interServiceGap)
         private val gapLabel  = view.findViewById<TextView>(R.id.tvGapLabel)
         private val statusBar = view.findViewById<View>(R.id.statusBar)
@@ -144,7 +144,7 @@ class UnitDiagramAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     // ── Calling Point ViewHolder ──────────────────────────────────────────────
 
-    inner class CallingPointVH(view: View) : RecyclerView.ViewHolder(view) {
+    class CallingPointVH(view: View) : RecyclerView.ViewHolder(view) {
         private val lineTop      = view.findViewById<View>(R.id.lineTop)
         private val lineBottom   = view.findViewById<View>(R.id.lineBottom)
         private val stopNode     = view.findViewById<View>(R.id.stopNode)

@@ -12,4 +12,9 @@
     <!-- Disruption banner -->
     <color name="disruption_bg">#B71C1C</color>
     <color name="disruption_text">#FFFFFF</color>
+    <color name="search_box_bg">#FFFFFF</color>
+    <color name="search_box_text">#111111</color>
+    <color name="search_box_hint">#777777</color>
+    <color name="search_box_stroke">#AAAAAA</color>
+    <color name="approach_state_text">#1A237E</color>
 </resources>

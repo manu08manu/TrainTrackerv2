@@ -152,4 +152,31 @@ Performance data not available (set HSP_USERNAME/PASSWORD)
     <string name="diagram_delay_cp">+%1$d</string>
     <string name="toc_no_contact">No contact details available</string>
     <string name="hsp_unit_header">🚆 %1$s</string>
+    <string name="cd_historical_data">Historical data</string>
+    <string name="cd_view_diagram">View diagram</string>
+    <string name="icon_diagram">📋</string>
+    <string name="icon_station_empty">🚉</string>
+    <string name="empty_no_trains">There are no trains scheduled in this window.
+Try adjusting the time or checking for disruptions.</string>
+    <string name="divider_train_here">● Train here</string>
+    <string name="hint_api_token">API Token</string>
+    <string name="label_on_time">on time</string>
+    <string name="passing_stations_note">Showing all stops including passing stations</string>
+    <string name="header_crs">CRS</string>
+    <string name="header_station">Station</string>
+    <string name="header_plt">Plt</string>
+    <string name="header_sched">Sched</string>
+    <string name="header_actual">Actual</string>
+    <string name="header_delay">Delay</string>
+    <string name="hint_headcode">Headcode e.g. 1A34, 6M21</string>
+    <string name="chip_filter_active">Filter active</string>
+    <string name="hsp_from_station">FROM STATION…</string>
+    <string name="hsp_to_station">TO STATION…</string>
+    <string name="hsp_swap_stations">Swap stations</string>
+    <string name="hsp_select_date">Select date</string>
+    <string name="icon_info">ℹ</string>
+    <string name="live_indicator_dot">● </string>
+    <string name="coupling_formed_from">%1$s %2$s at %3$s</string>
+    <string name="unit_summary_label">🚆 %s</string>
+    <string name="placeholder_dash">—</string>
 </resources>

@@ -70,7 +70,7 @@ class TrainAdapter(
             b.tvTime.text = formatTimeFromIso(s.scheduledTime)
 
             // ── Headcode ── always shown; staffboards always return 4-char codes
-            b.tvHeadcode.text = s.trainId.ifEmpty { "—" }
+            b.tvHeadcode.text = s.trainId.ifEmpty { b.root.context.getString(R.string.placeholder_dash) }
 
             // ── Schedule tag ──────────────────────────────────────────────────
             when (s.scheduleTag) {
@@ -95,7 +95,7 @@ class TrainAdapter(
 
             // Tint card background: passing-through services get a grey tint; non-passenger get category tint
             val cardTint = when {
-                s.isServicePassing               -> 0x1A808080  // subtle grey — passing through
+                s.isServicePassing                         -> 0x1A808080
                 s.category == ServiceCategory.FREIGHT      -> 0x0D8B4513
                 s.category == ServiceCategory.ECS          -> 0x0D1565C0
                 s.category == ServiceCategory.LIGHT_ENGINE -> 0x0D6A1FA2
@@ -161,6 +161,9 @@ class TrainAdapter(
             val approach = s.approachState
             b.tvApproachState.text       = approach
             b.tvApproachState.visibility = if (approach.isNotEmpty()) View.VISIBLE else View.GONE
+            val tv = android.util.TypedValue()
+            ctx.theme.resolveAttribute(android.R.attr.textColorPrimary, tv, true)
+            b.tvApproachState.setTextColor(tv.data)
 
             // ── Punctuality badge ─────────────────────────────────────────────
             if (s.punctualityPercent >= 0) {
@@ -184,6 +187,16 @@ class TrainAdapter(
 
             if (resId != 0) {
                 b.imgTocLogo.setImageResource(resId)
+                val nightMode = ctx.resources.configuration.uiMode and
+                        android.content.res.Configuration.UI_MODE_NIGHT_MASK
+                if (nightMode == android.content.res.Configuration.UI_MODE_NIGHT_YES) {
+                    b.imgTocLogo.setBackgroundResource(R.drawable.bg_toc_logo)
+                    val p = (2 * ctx.resources.displayMetrics.density).toInt()
+                    b.imgTocLogo.setPadding(p, p, p, p)
+                } else {
+                    b.imgTocLogo.background = null
+                    b.imgTocLogo.setPadding(0, 0, 0, 0)
+                }
                 b.imgTocLogo.visibility = View.VISIBLE
                 b.tvTocBadge.visibility = View.GONE
             } else {
@@ -204,7 +217,7 @@ class TrainAdapter(
                 val dotColour = when {
                     nsi.isSevere -> colourCancelled
                     nsi.isMajor  -> colourNsiMajor
-                    else         -> colourNsiMinor  // minor
+                    else         -> colourNsiMinor
                 }
                 b.nsiDot.setColorFilter(dotColour)
                 b.nsiDot.visibility = View.VISIBLE
@@ -225,25 +238,23 @@ class TrainAdapter(
             // Left bar: TOC brand colour for on-time; status colour otherwise
             val tocColour       = TocData.brandColor(s.operatorCode.ifEmpty { s.operator })
             val defaultBarColor = 0xFF1A237E.toInt()
-            // Non-passenger services get a different bar colour scheme
             val barColour = when {
-                s.isCancelled                          -> colourCancelled
-                s.isDelayed                            -> colourDelayed
-                s.category == ServiceCategory.FREIGHT  -> 0xFF4E342E.toInt()  // brown for freight
-                s.category == ServiceCategory.RAILTOUR -> 0xFF1A237E.toInt()  // indigo for railtours
-                s.category == ServiceCategory.ECS      -> 0xFF37474F.toInt()  // blue-grey for ECS
+                s.isCancelled                              -> colourCancelled
+                s.isDelayed                                -> colourDelayed
+                s.category == ServiceCategory.FREIGHT      -> 0xFF4E342E.toInt()
+                s.category == ServiceCategory.RAILTOUR     -> 0xFF1A237E.toInt()
+                s.category == ServiceCategory.ECS          -> 0xFF37474F.toInt()
                 s.category == ServiceCategory.LIGHT_ENGINE -> 0xFF424242.toInt()
-                tocColour != 0xFF555555.toInt()         -> tocColour
-                else                                    -> defaultBarColor
+                tocColour != 0xFF555555.toInt()             -> tocColour
+                else                                        -> defaultBarColor
             }
             b.statusBar.setBackgroundColor(barColour)
 
             // ── Delay pill ────────────────────────────────────────────────────
-            // For departed trains, use actual vs scheduled delay (not stale etd estimate)
             val displayDelay = when {
-                s.isCancelled   -> 0
-                s.hasDeparted   -> minuteDelay(s.scheduledTime, s.actualTime)
-                else            -> s.delayMinutes
+                s.isCancelled -> 0
+                s.hasDeparted -> minuteDelay(s.scheduledTime, s.actualTime)
+                else          -> s.delayMinutes
             }
             if (displayDelay > 0) {
                 b.tvDelay.text = b.root.context.getString(R.string.delay_mins_short, displayDelay)
@@ -260,17 +271,16 @@ class TrainAdapter(
             // ── Alert ─────────────────────────────────────────────────────────
             b.tvAlertIcon.visibility = if (s.hasAlert) View.VISIBLE else View.GONE
             b.tvAlertIcon.setOnClickListener {
-                val nsi = nsiLookup?.invoke(s.operatorCode)
+                val nsiAlert = nsiLookup?.invoke(s.operatorCode)
                 val msg = buildString {
                     if (s.isCancelled) {
                         val reason = if (s.cancelReason.isNotEmpty()) ReasonCodes.resolveCancel(s.cancelReason) else ""
                         if (reason.isNotEmpty()) appendLine("Cancelled: $reason")
                         else appendLine("This service is cancelled.")
-                    }
-                    else if (s.isDelayed) appendLine("Running late: ${s.etd}")
-                    if (nsi != null && !nsi.isGood) {
+                    } else if (s.isDelayed) appendLine("Running late: ${s.etd}")
+                    if (nsiAlert != null && !nsiAlert.isGood) {
                         if (isNotEmpty()) appendLine()
-                        append("${nsi.tocName}: ${nsi.statusLabel}")
+                        append("${nsiAlert.tocName}: ${nsiAlert.statusLabel}")
                     }
                 }.trim()
                 androidx.appcompat.app.AlertDialog.Builder(ctx)
@@ -280,15 +290,15 @@ class TrainAdapter(
                     .show()
             }
 
-            // ── Alpha (dim departed/cancelled/non-stopping) ─────────────────
+            // ── Alpha (dim departed/cancelled/non-stopping) ───────────────────
             b.root.alpha = when {
                 s.isCancelled || s.hasDeparted -> 0.5f
-                s.isServicePassing              -> 0.7f   // passenger passing through — dimmed
-                s.isFreight                     -> 0.75f  // freight/non-stopping — slightly dimmed
+                s.isServicePassing              -> 0.7f
+                s.isFreight                     -> 0.75f
                 else                            -> 1f
             }
 
-            // ── Unit formation + split/coupling info ─────────────────────────────
+            // ── Unit formation ────────────────────────────────────────────────
             if (s.units.isNotEmpty()) {
                 b.tvUnitFormation.text = s.units.joinToString(" + ")
                 b.tvUnitFormation.visibility = View.VISIBLE
@@ -333,7 +343,7 @@ class TrainAdapter(
             b.tvCouplingInfo.text       = couplingLine
             b.tvCouplingInfo.visibility = if (couplingLine.isNotEmpty()) View.VISIBLE else View.GONE
 
-            // Forms next service
+            // ── Forms next service ────────────────────────────────────────────
             val formsLine = if (s.formsHeadcode.isNotEmpty()) "→ Forms ${s.formsHeadcode}" else ""
             b.tvFormsNext.text       = formsLine
             b.tvFormsNext.visibility = if (formsLine.isNotEmpty()) View.VISIBLE else View.GONE
@@ -356,7 +366,7 @@ class TrainAdapter(
                 true
             }
 
-            // ── Click / long-press ────────────────────────────────────────────────
+            // ── Click / long-press ────────────────────────────────────────────
             b.root.isClickable = true
             b.root.isFocusable = false
             b.root.setOnClickListener { onServiceClick(s) }

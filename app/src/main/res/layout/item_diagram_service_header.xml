@@ -26,7 +26,7 @@
             android:id="@+id/tvGapLabel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textSize="10sp"
+            android:textSize="11sp"
             android:textColor="?attr/colorOnSurfaceVariant"
             android:textStyle="italic"
             android:paddingHorizontal="4dp"
@@ -80,10 +80,10 @@
             android:id="@+id/tvFormation"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="10sp"
+            android:textSize="11sp"
             android:fontFamily="monospace"
             android:textColor="?attr/colorOnSurfaceVariant"
-            android:paddingEnd="6dp"
+            android:paddingHorizontal="6dp"
             android:visibility="gone"/>
 
         <!-- Status chip (On time / +Xm / Cancelled) -->
@@ -91,7 +91,7 @@
             android:id="@+id/tvStatus"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="10sp"
+            android:textSize="11sp"
             android:textStyle="bold"
             android:textColor="@color/white"
             android:paddingHorizontal="6dp"

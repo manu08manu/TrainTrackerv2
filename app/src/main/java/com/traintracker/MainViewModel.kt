@@ -77,7 +77,6 @@ class MainViewModel : ViewModel() {
     val availableOperators: StateFlow<List<String>> = _availableOperators.asStateFlow()
 
     private val _headcodeFilter     = MutableStateFlow("")
-    val headcodeFilter: StateFlow<String> = _headcodeFilter.asStateFlow()
 
     private val _trustConnected = MutableStateFlow(false)
     val trustConnected: StateFlow<Boolean> = _trustConnected.asStateFlow()

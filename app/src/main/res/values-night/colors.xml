@@ -3,4 +3,11 @@
     <color name="status_ontime">#66BB6A</color>
     <color name="status_delayed">#FFA726</color>
     <color name="status_cancelled">#EF5350</color>
+    <color name="search_box_bg">#2A2A2A</color>
+    <color name="search_box_text">#FFFFFF</color>
+    <color name="search_box_hint">#888888</color>
+    <color name="search_box_stroke">#555555</color>
+    <color name="approach_state_text">#64B5F6</color>
+    
+    <color name="primary_light">#B39DDB</color>
 </resources>

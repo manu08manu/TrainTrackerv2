@@ -11,7 +11,7 @@
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
-        android:background="?attr/colorPrimary"
+        android:background="?attr/colorPrimaryContainer"
         android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"/>
 
     <!-- Column headers -->
@@ -20,7 +20,7 @@
         android:layout_width="match_parent"
         android:layout_height="32dp"
         android:orientation="horizontal"
-        android:background="?attr/colorSurfaceVariant"
+        android:background="?attr/colorPrimaryContainer"
         android:paddingHorizontal="4dp"
         android:gravity="center_vertical">
 
@@ -32,8 +32,8 @@
         <TextView
             android:layout_width="44dp"
             android:layout_height="wrap_content"
-            android:text="CRS"
-            android:textSize="10sp"
+            android:text="@string/header_crs"
+            android:textSize="11sp"
             android:textStyle="bold"
             android:textColor="?attr/colorOnSurfaceVariant"/>
 
@@ -41,16 +41,16 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Station"
-            android:textSize="10sp"
+            android:text="@string/header_station"
+            android:textSize="11sp"
             android:textStyle="bold"
             android:textColor="?attr/colorOnSurfaceVariant"/>
 
         <TextView
             android:layout_width="32dp"
             android:layout_height="wrap_content"
-            android:text="Plt"
-            android:textSize="10sp"
+            android:text="@string/header_plt"
+            android:textSize="11sp"
             android:textStyle="bold"
             android:textColor="?attr/colorOnSurfaceVariant"
             android:gravity="center"/>
@@ -58,8 +58,8 @@
         <TextView
             android:layout_width="42dp"
             android:layout_height="wrap_content"
-            android:text="Sched"
-            android:textSize="10sp"
+            android:text="@string/header_sched"
+            android:textSize="11sp"
             android:textStyle="bold"
             android:textColor="?attr/colorOnSurfaceVariant"
             android:gravity="center"/>
@@ -67,8 +67,8 @@
         <TextView
             android:layout_width="42dp"
             android:layout_height="wrap_content"
-            android:text="Actual"
-            android:textSize="10sp"
+            android:text="@string/header_actual"
+            android:textSize="11sp"
             android:textStyle="bold"
             android:textColor="?attr/colorOnSurfaceVariant"
             android:gravity="center"/>
@@ -76,8 +76,8 @@
         <TextView
             android:layout_width="36dp"
             android:layout_height="wrap_content"
-            android:text="Delay"
-            android:textSize="10sp"
+            android:text="@string/header_delay"
+            android:textSize="11sp"
             android:textStyle="bold"
             android:textColor="?attr/colorOnSurfaceVariant"
             android:gravity="center"/>

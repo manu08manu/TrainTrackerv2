@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
+import com.google.android.material.color.DynamicColors
 import java.util.concurrent.TimeUnit
 
 class TrainTrackerApp : Application() {
@@ -19,6 +20,7 @@ class TrainTrackerApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        DynamicColors.applyToActivitiesIfAvailable(this)
         httpClient = OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(360, TimeUnit.SECONDS)

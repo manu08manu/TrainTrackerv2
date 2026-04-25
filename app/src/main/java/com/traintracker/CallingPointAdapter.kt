@@ -12,7 +12,6 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.color.MaterialColors
 import com.traintracker.databinding.ItemCallingPointBinding
 import com.traintracker.databinding.ItemTrainHereDividerBinding
 
@@ -257,7 +256,7 @@ class CallingPointAdapter(
         }
     }
 
-    inner class DividerViewHolder(private val b: ItemTrainHereDividerBinding) :
+    class DividerViewHolder(private val b: ItemTrainHereDividerBinding) :
         RecyclerView.ViewHolder(b.root) {
 
         fun bind(row: CallingPointRow) {

@@ -19,7 +19,7 @@
         android:id="@+id/tvTrainHereLabel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="● Train here"
+        android:text="@string/divider_train_here"
         android:textColor="?attr/colorPrimary"
         android:textSize="12sp"
         android:paddingStart="8dp"

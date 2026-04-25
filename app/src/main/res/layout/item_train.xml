@@ -13,7 +13,8 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:baselineAligned="false">
 
         <!-- TOC/category-coloured left bar -->
         <View
@@ -35,6 +36,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
+        android:baselineAligned="false"
                 android:gravity="center_vertical">
 
                 <TextView
@@ -64,7 +66,7 @@
                     android:id="@+id/tvPunctuality"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textSize="10sp"
+                    android:textSize="11sp"
                     android:textStyle="bold"
                     android:layout_marginEnd="6dp"
                     android:visibility="gone"/>
@@ -85,6 +87,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
+        android:baselineAligned="false"
                 android:gravity="center_vertical"
                 android:layout_marginTop="5dp">
 
@@ -93,6 +96,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
+        android:baselineAligned="false"
                     android:gravity="center_vertical"
                     android:minWidth="62dp">
 
@@ -108,7 +112,7 @@
                         android:id="@+id/tvScheduleTag"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:textSize="9sp"
+                        android:textSize="11sp"
                         android:textColor="@color/white"
                         android:paddingHorizontal="4dp"
                         android:paddingVertical="1dp"
@@ -124,6 +128,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:orientation="horizontal"
+        android:baselineAligned="false"
                     android:gravity="center_vertical"
                     android:paddingHorizontal="10dp">
 
@@ -143,7 +148,7 @@
                         android:layout_height="wrap_content"
                         android:textSize="11sp"
                         android:textStyle="italic"
-                        android:textColor="?attr/colorPrimary"
+                        android:textColor="@color/approach_state_text"
                         android:layout_marginStart="4dp"
                         android:visibility="gone"/>
 
@@ -162,6 +167,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
+        android:baselineAligned="false"
                     android:gravity="center_vertical">
 
                     <!-- NSI status dot: green=good (hidden), amber=minor, orange=major, red=severe -->
@@ -176,8 +182,8 @@
 
                     <ImageView
                         android:id="@+id/imgTocLogo"
-                        android:layout_width="36dp"
-                        android:layout_height="16dp"
+                        android:layout_width="72dp"
+                        android:layout_height="28dp"
                         android:contentDescription="@string/toc_logo_description"
                         android:scaleType="fitStart"
                         android:adjustViewBounds="true"
@@ -188,7 +194,7 @@
                         android:id="@+id/tvTocBadge"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:textSize="10sp"
+                        android:textSize="11sp"
                         android:textColor="@color/white"
                         android:paddingHorizontal="5dp"
                         android:paddingVertical="2dp"
@@ -217,7 +223,7 @@
                         android:id="@+id/tvDelay"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:textSize="10sp"
+                        android:textSize="11sp"
                         android:textColor="@color/white"
                         android:paddingHorizontal="5dp"
                         android:paddingVertical="1dp"
@@ -229,7 +235,7 @@
                         android:id="@+id/tvCountdown"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:textSize="10sp"
+                        android:textSize="11sp"
                         android:textColor="?attr/colorOnSurfaceVariant"
                         android:layout_marginTop="1dp"
                         android:gravity="end"
@@ -239,7 +245,7 @@
                         android:id="@+id/tvAlertIcon"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="ℹ"
+                        android:text="@string/icon_info"
                         android:textSize="11sp"
                         android:textColor="?attr/colorOnSurfaceVariant"
                         android:layout_marginTop="1dp"
@@ -255,7 +261,7 @@
                 android:id="@+id/tvJourneyTime"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textSize="10sp"
+                android:textSize="11sp"
                 android:textColor="?attr/colorOnSurfaceVariant"
                 android:layout_marginTop="3dp"
                 android:visibility="gone"/>
@@ -294,7 +300,7 @@
                 android:id="@+id/tvFormsNext"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textSize="10sp"
+                android:textSize="11sp"
                 android:textColor="#FF1565C0"
                 android:layout_marginTop="3dp"
                 android:visibility="gone"/>
@@ -303,7 +309,7 @@
                 android:id="@+id/tvUnitFormation"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textSize="10sp"
+                android:textSize="11sp"
                 android:textColor="?attr/colorOnSurfaceVariant"
                 android:layout_marginTop="2dp"
                 android:visibility="gone"/>

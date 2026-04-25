@@ -376,19 +376,6 @@ data class UnitAllocation(
     val coachCount: Int,
     val multipleUnits: Boolean = false
 ) {
-    val summary: String get() = buildString {
-        if (className.isNotEmpty()) append(className)
-        if (tractionType.isNotEmpty()) {
-            if (isNotEmpty()) append(" · ")
-            append(tractionType)
-        }
-        if (units.isNotEmpty()) {
-            if (isNotEmpty()) append(" · ")
-            append(units.joinToString(" + "))
-        }
-        if (coachCount > 0) append(" · ${coachCount}c")
-        if (multipleUnits && units.size > 1) append(" (${units.size}-unit formation)")
-    }
 }
 
 // ─── BoardResult ──────────────────────────────────────────────────────────────

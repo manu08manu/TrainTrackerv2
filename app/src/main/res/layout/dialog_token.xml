@@ -11,7 +11,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-        android:hint="API Token">
+        android:hint="@string/hint_api_token">
 
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/etToken"

@@ -15,7 +15,7 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="?attr/colorPrimary"
+            android:background="?attr/colorPrimaryContainer"
             android:padding="12dp"
             android:orientation="vertical">
 
@@ -60,11 +60,29 @@
                     android:layout_height="36dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:src="@android:drawable/ic_menu_recent_history"
-                    android:contentDescription="Historical data"
+                    android:contentDescription="@string/cd_historical_data"
                     app:tint="@color/white"
                     android:layout_marginStart="4dp"/>
-            </LinearLayout>
+                <ImageButton
+                    android:id="@+id/btnFavourite"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/ic_star_outline"
+                    android:contentDescription="@string/btn_favourite"
+                    app:tint="@color/white"
+                    android:layout_marginStart="4dp"/>
+                <ImageButton
+                    android:id="@+id/btnStationInfo"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@android:drawable/ic_menu_info_details"
+                    android:contentDescription="@string/menu_station_info"
+                    app:tint="@color/white"
+                    android:layout_marginStart="4dp"/>
 
+            </LinearLayout>
             <!-- Search bar -->
             <LinearLayout
                 android:layout_width="match_parent"
@@ -77,42 +95,27 @@
                     android:layout_weight="1"
                     android:layout_marginEnd="8dp"
                     app:endIconMode="clear_text"
-                    app:endIconTint="@color/white"
+                    app:endIconTint="@color/search_box_text"
+                    app:boxBackgroundColor="@color/search_box_bg"
+                    app:boxStrokeColor="@color/search_box_stroke"
+                    app:boxBackgroundMode="filled"
+                    app:hintEnabled="false"
                     style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense">
                     <AutoCompleteTextView
                         android:id="@+id/etCrs"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:inputType="textAutoComplete"
-                        android:textColor="@color/white"
-                        android:textColorHint="#99FFFFFF"
+                        android:textColor="@color/search_box_text"
+                        android:textColorHint="@color/search_box_hint"
+                        android:padding="12dp"
+                        android:textSize="15sp"
+                        android:gravity="center"
+                        
                         android:completionThreshold="1"
                         android:dropDownHeight="300dp"
                         android:hint="@string/search_hint"/>
                 </com.google.android.material.textfield.TextInputLayout>
-
-                <ImageButton
-                    android:id="@+id/btnFavourite"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
-                    android:layout_gravity="bottom"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:src="@drawable/ic_star_outline"
-                    android:contentDescription="@string/btn_favourite"
-                    app:tint="@color/white"
-                    android:layout_marginEnd="2dp"/>
-
-                <ImageButton
-                    android:id="@+id/btnStationInfo"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:layout_gravity="bottom"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:src="@android:drawable/ic_menu_info_details"
-                    android:contentDescription="@string/menu_station_info"
-                    app:tint="@color/white"
-                    android:layout_marginEnd="4dp"/>
-
                 <Button
                     android:id="@+id/btnSearch"
                     android:layout_width="wrap_content"
@@ -150,7 +153,7 @@
                 android:id="@+id/tvRecentsLabel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Recent:"
+                android:text="@string/label_recents"
                 android:textColor="#AAFFFFFF"
                 android:textSize="11sp"
                 android:layout_marginTop="6dp"
@@ -175,7 +178,9 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             app:tabGravity="fill"
-            app:tabMode="fixed"/>
+            app:tabMode="fixed"
+            app:tabSelectedTextColor="?attr/colorPrimary"
+            app:tabIndicatorColor="?attr/colorPrimary"/>
 
         <!-- Disruption banner -->
         <LinearLayout
@@ -321,12 +326,12 @@
                 android:id="@+id/btnDiagram"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="📋"
+                android:text="@string/icon_diagram"
                 android:textSize="18sp"
                 android:paddingHorizontal="8dp"
                 android:paddingVertical="6dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="View diagram"
+                android:contentDescription="@string/cd_view_diagram"
                 android:visibility="gone"/>
 
         </LinearLayout>
@@ -362,14 +367,14 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="🚉"
+                android:text="@string/icon_station_empty"
                 android:textSize="48sp"/>
 
             <TextView
                 android:id="@+id/tvEmptyTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="No services found"
+                android:text="@string/no_services_found"
                 android:textSize="18sp"
                 android:textStyle="bold"
                 android:textColor="?attr/colorOnSurface"
@@ -379,7 +384,7 @@
                 android:id="@+id/tvEmptySubtitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="There are no trains scheduled in this window.\nTry adjusting the time or checking for disruptions."
+                android:text="@string/empty_no_trains"
                 android:textSize="13sp"
                 android:textColor="?attr/colorOnSurface"
                 android:alpha="0.6"
