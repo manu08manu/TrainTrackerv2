@@ -15,6 +15,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.net.toUri
 import androidx.core.view.isEmpty
+import androidx.core.view.isVisible
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -79,6 +80,7 @@ class StationBoardActivity : AppCompatActivity() {
         observeState()
         observeIncidents()
         observeNsi()
+        observeNextService()
 
         binding.swipeRefresh.setOnRefreshListener {
             viewModel.fetchBoard(currentCrs, currentBoardType)
@@ -178,7 +180,13 @@ class StationBoardActivity : AppCompatActivity() {
                     isCancelled = service.isCancelled,
                     cancelReason = service.cancelReason,
                     splitTiploc = service.splitTiplocName.ifEmpty { service.splitTiploc },
-                    splitToHeadcode = service.splitToHeadcode
+                    splitToHeadcode = service.splitToHeadcode,
+                    splitToDestName = service.splitToDestName,
+                    splitToUid      = service.splitToUid,
+                    couplingTiploc  = service.couplingTiplocName.ifEmpty { service.couplingTiploc },
+                    coupledFromHeadcode = service.coupledFromHeadcode,
+                    coupledFromUid      = service.coupledFromUid,
+                    couplingAssocType   = service.couplingAssocType
                 )
             }
         )
@@ -296,6 +304,7 @@ class StationBoardActivity : AppCompatActivity() {
                             if (state.board.services.isEmpty()) {
                                 binding.tvError.text = getString(R.string.board_no_services)
                                 binding.tvError.visibility = View.VISIBLE
+                                viewModel.fetchNextInternationalService(currentCrs, currentBoardType)
                             } else {
                                 adapter.nsiLookup = { code -> viewModel.nsiForOperator(code) }
                                 adapter.tocDetailLookup = { code -> viewModel.tocDetails.value[code.uppercase()] }
@@ -550,6 +559,18 @@ class StationBoardActivity : AppCompatActivity() {
         }
 
         dialog.show()
+
+    }
+    private fun observeNextService() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.nextService.collect { msg ->
+                    if (msg.isNotEmpty() && binding.tvError.isVisible) {
+                        binding.tvError.text = "${binding.tvError.text}\n\n$msg"
+                    }
+                }
+            }
+        }
     }
 
     private fun hideKeyboard() {

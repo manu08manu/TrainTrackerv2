@@ -138,7 +138,9 @@ class HspViewModel : ViewModel() {
                     }
                 }
                 val rows = result.locations.map { loc ->
-                    val name = StationData.findByCrs(loc.crs)?.name ?: loc.name.ifEmpty { loc.tiploc }
+                    val name = loc.name.ifEmpty { null }
+                        ?: StationData.findByCrs(loc.crs)?.name
+                        ?: loc.tiploc
                     val sched  = loc.scheduledDep.ifEmpty { loc.scheduledArr }
                     val actual = loc.actualDep.ifEmpty { loc.actualArr }
                     val status = when {
@@ -213,6 +215,16 @@ class HspActivity : AppCompatActivity() {
         setupStationPickers()
         setupDatePicker()
         setupResults()
+        savedInstanceState?.let {
+            fromCrs = it.getString("fromCrs", "")
+            toCrs   = it.getString("toCrs", "")
+            selectedDate = it.getString("selectedDate", "")
+            val fromName = it.getString("fromName", "")
+            val toName   = it.getString("toName", "")
+            if (fromName.isNotEmpty()) binding.btnFromStation.text = fromName
+            if (toName.isNotEmpty())   binding.btnToStation.text   = toName
+        }
+
         observeState()
 
         // Default date to yesterday
@@ -317,6 +329,16 @@ class HspActivity : AppCompatActivity() {
         binding.rvResults.layoutManager = LinearLayoutManager(this)
         binding.rvResults.addItemDecoration(DividerItemDecoration(this, DividerItemDecoration.VERTICAL))
         binding.rvResults.adapter = resultsAdapter
+    }
+
+
+    override fun onSaveInstanceState(outState: android.os.Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString("fromCrs", fromCrs)
+        outState.putString("toCrs", toCrs)
+        outState.putString("selectedDate", selectedDate)
+        outState.putString("fromName", binding.btnFromStation.text.toString())
+        outState.putString("toName", binding.btnToStation.text.toString())
     }
 
     // ─── Search ───────────────────────────────────────────────────────────────

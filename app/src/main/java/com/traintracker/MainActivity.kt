@@ -128,7 +128,13 @@ class MainActivity : AppCompatActivity() {
                     isCancelled = service.isCancelled,
                     cancelReason = service.cancelReason,
                     splitTiploc = service.splitTiplocName.ifEmpty { service.splitTiploc },
-                    splitToHeadcode = service.splitToHeadcode
+                    splitToHeadcode = service.splitToHeadcode,
+                    splitToDestName = service.splitToDestName,
+                    splitToUid      = service.splitToUid,
+                    couplingTiploc  = service.couplingTiplocName.ifEmpty { service.couplingTiploc },
+                    coupledFromHeadcode = service.coupledFromHeadcode,
+                    coupledFromUid      = service.coupledFromUid,
+                    couplingAssocType   = service.couplingAssocType
                 )
             }
         )

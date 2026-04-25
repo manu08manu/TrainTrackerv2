@@ -525,11 +525,16 @@ class ServerApiClient {
                 splitTiplocName    = s.safeString("splitTiplocName"),
                 splitToHeadcode    = s.safeString("splitToHeadcode"),
                 splitToUid         = s.safeString("splitToUid"),
+                splitToDestName    = s.safeString("splitToDestName"),
                 couplingTiploc     = s.safeString("couplingTiploc"),
                 couplingTiplocName = s.safeString("couplingTiplocName"),
+                coupledFromUid      = s.safeString("coupledFromUid"),
                 coupledFromHeadcode = s.safeString("coupledFromHeadcode"),
+                couplingAssocType   = s.safeString("couplingAssocType"),
                 formsUid            = s.safeString("formsUid"),
-                formsHeadcode       = s.safeString("formsHeadcode")
+                formsHeadcode       = s.safeString("formsHeadcode"),
+                destName            = s.safeString("destName").ifEmpty { null },
+                originName          = s.safeString("originName").ifEmpty { null }
             ))
         }
         return result
@@ -543,14 +548,15 @@ class ServerApiClient {
             val tiploc = cp.optString("tiploc")
             val crs    = cp.safeString("crs").ifEmpty { null }
             result.add(CallingPoint(
-                locationName = crs?.let { StationData.findByCrs(it)?.name }
+                locationName = cp.safeString("name").ifEmpty { null }
+                    ?: crs?.let { StationData.findByCrs(it)?.name }
                     ?: tiploc,
                 crs          = crs ?: "",
                 st           = cp.optString("scheduledTime"),
                 et           = cp.safeString("actualTime"),
                 at           = cp.safeString("actualTime"),
                 isCancelled  = cp.optBoolean("isCancelled", false),
-                length       = null,
+                length       = cp.optInt("length", 0).takeIf { it > 0 },
                 platform     = cp.safeString("platform"),
                 isPassing    = cp.optBoolean("isPass", false)
             ))
@@ -602,11 +608,16 @@ data class ServerService(
     val splitTiplocName: String = "",
     val splitToHeadcode: String = "",
     val splitToUid: String = "",
+    val splitToDestName: String = "",
     val couplingTiploc: String = "",
     val couplingTiplocName: String = "",
+    val coupledFromUid: String = "",
     val coupledFromHeadcode: String = "",
+    val couplingAssocType: String = "",
     val formsUid: String = "",
-    val formsHeadcode: String = ""
+    val formsHeadcode: String = "",
+    val destName: String? = null,
+    val originName: String? = null
 )
 
 data class CallingPointsResult(

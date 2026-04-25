@@ -232,9 +232,12 @@ data class TrainService(
     val splitTiplocName: String = "",
     val splitToHeadcode: String = "",
     val splitToUid: String = "",
+    val splitToDestName: String = "",
     val couplingTiploc: String = "",
     val couplingTiplocName: String = "",
+    val coupledFromUid: String = "",
     val coupledFromHeadcode: String = "",
+    val couplingAssocType: String = "",
     val formsUid: String = "",
     val formsHeadcode: String = ""
 ) {

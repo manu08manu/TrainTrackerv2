@@ -27,6 +27,11 @@ class ServiceDetailActivity : AppCompatActivity() {
     private var queryCrs      = ""
     private var splitTiploc     = ""
     private var splitToHeadcode = ""
+    private var splitToDestName = ""
+    private var splitToUid         = ""
+    private var coupledFromUid     = ""
+    private var couplingTiplocVar  = ""
+    private var coupledFromHcVar   = ""
     private var trainHeadcode = ""
     private var destCrs       = ""   // for HSP lookup
 
@@ -56,6 +61,12 @@ class ServiceDetailActivity : AppCompatActivity() {
         private const val EXTRA_PLATFORM            = "platform"
         private const val EXTRA_SPLIT_TIPLOC        = "split_tiploc_crs"
         private const val EXTRA_SPLIT_HEADCODE      = "split_headcode"
+        private const val EXTRA_SPLIT_DEST_NAME     = "split_dest_name"
+        private const val EXTRA_SPLIT_TO_UID        = "split_to_uid"
+        private const val EXTRA_COUPLING_TIPLOC     = "coupling_tiploc"
+        private const val EXTRA_COUPLED_FROM_HC     = "coupled_from_headcode"
+        private const val EXTRA_COUPLING_ASSOC_TYPE = "coupling_assoc_type"
+        private const val EXTRA_COUPLED_FROM_UID  = "coupled_from_uid"
 
         fun start(ctx: Context, serviceId: String, headcode: String,
                   origin: String, destination: String, std: String, etd: String = "",
@@ -68,7 +79,13 @@ class ServiceDetailActivity : AppCompatActivity() {
                   isCancelled: Boolean = false,
                   cancelReason: String = "",
                   splitTiploc: String = "",
-                  splitToHeadcode: String = "") {
+                  splitToHeadcode: String = "",
+                  splitToDestName: String = "",
+                  splitToUid: String = "",
+                  couplingTiploc: String = "",
+                  coupledFromHeadcode: String = "",
+                  coupledFromUid: String = "",
+                  couplingAssocType: String = "") {
             ctx.startActivity(Intent(ctx, ServiceDetailActivity::class.java).apply {
                 putExtra(EXTRA_SERVICE_ID, serviceId)
                 putExtra(EXTRA_HEADCODE,   headcode)
@@ -88,6 +105,12 @@ class ServiceDetailActivity : AppCompatActivity() {
                 putExtra(EXTRA_CANCEL_REASON, cancelReason)
                 putExtra(EXTRA_SPLIT_TIPLOC, splitTiploc)
                 putExtra(EXTRA_SPLIT_HEADCODE, splitToHeadcode)
+                putExtra(EXTRA_SPLIT_DEST_NAME, splitToDestName)
+                putExtra(EXTRA_SPLIT_TO_UID, splitToUid)
+                putExtra(EXTRA_COUPLING_TIPLOC, couplingTiploc)
+                putExtra(EXTRA_COUPLED_FROM_HC, coupledFromHeadcode)
+                putExtra(EXTRA_COUPLED_FROM_UID, coupledFromUid)
+                putExtra(EXTRA_COUPLING_ASSOC_TYPE, couplingAssocType)
             })
         }
     }
@@ -109,6 +132,13 @@ class ServiceDetailActivity : AppCompatActivity() {
         queryCrs         = intent.getStringExtra(EXTRA_QUERY_CRS) ?: ""
         splitTiploc      = intent.getStringExtra(EXTRA_SPLIT_TIPLOC) ?: ""
         splitToHeadcode  = intent.getStringExtra(EXTRA_SPLIT_HEADCODE) ?: ""
+        splitToDestName  = intent.getStringExtra(EXTRA_SPLIT_DEST_NAME) ?: ""
+        splitToUid       = intent.getStringExtra(EXTRA_SPLIT_TO_UID) ?: ""
+        coupledFromUid       = intent.getStringExtra(EXTRA_COUPLED_FROM_UID) ?: ""
+        val rawCouplingTiploc = intent.getStringExtra(EXTRA_COUPLING_TIPLOC) ?: ""
+        couplingTiplocVar    = StationData.findByCrs(rawCouplingTiploc)?.crs ?: rawCouplingTiploc
+        coupledFromHcVar     = intent.getStringExtra(EXTRA_COUPLED_FROM_HC) ?: ""
+        android.util.Log.d("ServiceDetail", "splitTiploc=$splitTiploc splitToHeadcode=$splitToHeadcode splitToDestName=$splitToDestName splitToUid=$splitToUid")
         destCrs          = intent.getStringExtra(EXTRA_DEST_CRS)  ?: ""
         val boardUnits   = intent.getStringArrayListExtra(EXTRA_UNITS) ?: emptyList()
         // Cap at 20 — formation data can occasionally have bad values
@@ -148,7 +178,8 @@ class ServiceDetailActivity : AppCompatActivity() {
         bindUnitInfo(boardUnits, boardCoaches)
         viewModel.fetchCifServiceDetails(serviceId, queryCrs, initialDetails)
 
-        binding.tvServiceTitle.text = getString(R.string.service_title_route, resolveLocationName(origin), dest)
+        val titleDest = if (splitToDestName.isNotEmpty()) "$dest / $splitToDestName" else dest
+        binding.tvServiceTitle.text = getString(R.string.service_title_route, resolveLocationName(origin), titleDest)
         binding.rvCallingPoints.layoutManager = LinearLayoutManager(this)
 
         binding.chipSimple.setOnClickListener {
@@ -218,6 +249,8 @@ class ServiceDetailActivity : AppCompatActivity() {
                 "fetchServerAllocation: headcode=$trainHeadcode uid=$serviceId date=$serviceDate " +
                         "(std='$boardStd' stdHour=$stdHour nowHour=$nowHour)")
             viewModel.fetchServerAllocation(trainHeadcode, serviceDate, serviceId)
+            if (splitToUid.isNotEmpty()) viewModel.fetchSplitAllocation(splitToUid, serviceDate)
+            if (coupledFromUid.isNotEmpty()) viewModel.fetchSplitAllocation(coupledFromUid, serviceDate)
         }
 
         observeDetailState(boardUnits, boardCoaches)
@@ -225,6 +258,7 @@ class ServiceDetailActivity : AppCompatActivity() {
         observeFormation()
         observeHsp()
         observeServerAllocation()
+        observeSplitAllocation()
     }
 
     override fun onDestroy() {
@@ -351,6 +385,31 @@ class ServiceDetailActivity : AppCompatActivity() {
         }
     }
 
+    // ── Split allocation observer ──────────────────────────────────────────────
+    private fun observeSplitAllocation() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.splitAllocation.collect { splitInfo ->
+                    splitInfo ?: return@collect
+                    val mainInfo = viewModel.serverAllocation.value ?: return@collect
+                    val isCoupling = coupledFromUid.isNotEmpty()
+                    bindUnitInfo(mainInfo.units, mainInfo.coachCount, splitInfo.units, isCoupling)
+                }
+            }
+        }
+        // Also trigger when serverAllocation arrives after splitAllocation
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.serverAllocation.collect { mainInfo ->
+                    mainInfo ?: return@collect
+                    val splitInfo = viewModel.splitAllocation.value ?: return@collect
+                    val isCoupling = coupledFromUid.isNotEmpty()
+                    bindUnitInfo(mainInfo.units, mainInfo.coachCount, splitInfo.units, isCoupling)
+                }
+            }
+        }
+    }
+
     // ── Know Your Train live observer ─────────────────────────────────────────
 
     // ── Live TRUST overlay ────────────────────────────────────────────────────
@@ -408,7 +467,7 @@ class ServiceDetailActivity : AppCompatActivity() {
      * Only shows rolling stock class info when we have real Darwin unit numbers.
      * Coach count is shown if available and valid.
      */
-    private fun bindUnitInfo(units: List<String>, coachCount: Int) {
+    private fun bindUnitInfo(units: List<String>, coachCount: Int, splitUnits: List<String> = emptyList(), isCoupling: Boolean = false) {
         val hasUnits   = units.isNotEmpty()
         val hasCoaches = coachCount in 1..20
 
@@ -437,8 +496,43 @@ class ServiceDetailActivity : AppCompatActivity() {
             binding.tvUnitAllocationLabel.visibility = View.VISIBLE
             binding.tvUnitAllocation.text = classTractionLine.ifEmpty { unitLine }
             binding.tvUnitAllocation.visibility = View.VISIBLE
-            binding.tvUnitNumbers.text = if (classTractionLine.isNotEmpty()) unitLine else ""
-            binding.tvUnitNumbers.visibility = if (classTractionLine.isNotEmpty() && unitLine.isNotEmpty()) View.VISIBLE else View.GONE
+            // Split/join unit breakdown — one line per unit with destination and coach count
+            val continueUnits = units.filter { it !in splitUnits }
+            val splitStation = if (isCoupling)
+                StationData.findByCrs(couplingTiplocVar)?.name ?: couplingTiplocVar
+            else
+                StationData.findByCrs(splitTiploc)?.name ?: splitTiploc
+            val splitBreakdown = if (splitUnits.isNotEmpty() && continueUnits.isNotEmpty()) {
+                val mainDest = cachedDetails?.destination ?: ""
+                if (isCoupling) {
+                    // Joining: splitUnits join at couplingTiploc from their origin
+                    val joinCoaches = splitUnits.size * (coachCount / units.size)
+                    val mainCoaches = coachCount - joinCoaches
+                    buildString {
+                        append(continueUnits.joinToString(" + "))
+                        append(" → $mainDest ($mainCoaches coaches, full route)")
+                        append("\n")
+                        append(splitUnits.joinToString(" + "))
+                        append(" → $mainDest ($joinCoaches coaches, joins at $splitStation)")
+                        if (splitStation.isNotEmpty()) append("\n🔗 Joins at $splitStation")
+                    }
+                } else {
+                    // Splitting: continueUnits go to main dest, splitUnits go to split dest
+                    val sDest = splitToDestName.ifEmpty { splitToHeadcode }
+                    val mainCoaches = coachCount - (splitUnits.size * (coachCount / units.size))
+                    val splitCoaches = splitUnits.size * (coachCount / units.size)
+                    buildString {
+                        append(continueUnits.joinToString(" + "))
+                        append(" → $mainDest ($mainCoaches coaches)")
+                        append("\n")
+                        append(splitUnits.joinToString(" + "))
+                        append(" → $sDest ($splitCoaches coaches)")
+                        if (splitStation.isNotEmpty()) append("\nsplits at $splitStation")
+                    }
+                }
+            } else null
+            binding.tvUnitNumbers.text = splitBreakdown ?: if (classTractionLine.isNotEmpty()) unitLine else ""
+            binding.tvUnitNumbers.visibility = if ((splitBreakdown != null || (classTractionLine.isNotEmpty() && unitLine.isNotEmpty()))) View.VISIBLE else View.GONE
         } else {
             // No Darwin units yet — just show coach count, no class guessing
             binding.tvUnitAllocationLabel.text = getString(R.string.label_formation)
@@ -520,12 +614,29 @@ class ServiceDetailActivity : AppCompatActivity() {
 
         if (callingAdapter == null) {
             callingAdapter = CallingPointAdapter(
-                highlightCrs   = queryCrs,
-                showPassing    = showPassing,
-                showDetailed   = showDetailed,
-                onStationClick = { pt -> StationBoardActivity.start(this, pt.crs, pt.locationName) },
-                splitTiploc    = splitTiploc,
-                splitToHeadcode = splitToHeadcode
+                highlightCrs    = queryCrs,
+                showPassing     = showPassing,
+                showDetailed    = showDetailed,
+                onStationClick  = { pt -> StationBoardActivity.start(this, pt.crs, pt.locationName) },
+                splitTiploc       = splitTiploc,
+                splitToHeadcode   = splitToHeadcode,
+                splitToDestName   = splitToDestName,
+                splitToUid        = splitToUid,
+                couplingTiplocCrs = couplingTiplocVar,
+                coupledFromHc     = coupledFromHcVar,
+                onSplitClick      = { headcode, uid ->
+                    ServiceDetailActivity.start(
+                        ctx             = this,
+                        serviceId       = uid,
+                        headcode        = headcode,
+                        origin          = StationData.findByCrs(splitTiploc)?.name ?: splitTiploc,
+                        destination     = splitToDestName,
+                        std             = "",
+                        queryCrs        = splitTiploc,
+                        splitTiploc     = "",
+                        splitToHeadcode = ""
+                    )
+                }
             )
             binding.rvCallingPoints.adapter = callingAdapter
         }
@@ -631,13 +742,22 @@ class ServiceDetailActivity : AppCompatActivity() {
                 ?.length
         }
 
+        // Detect coach count changes along the route (e.g. train divides)
+        val allRoutePoints = d.cifSubsequentCallingPoints.ifEmpty { d.subsequentCallingPoints }
+        val distinctLengths = allRoutePoints.mapNotNull { it.length?.takeIf { l -> l in 1..20 } }.distinct()
+        val coachDisplay: String? = when {
+            distinctLengths.size >= 2 -> "${distinctLengths.first()} \u2192 ${distinctLengths.last()} coaches"
+            coaches != null           -> "$coaches coaches"
+            else                      -> null
+        }
+
         // tvRsid shows RSID / coaches — unit detail goes in the new card
         val rsidLine = when {
             d.rsid.isNotEmpty() && d.rsid != hc -> buildString {
                 append("RSID: ${d.rsid}")
-                if (coaches != null) append("  ·  $coaches coaches")
+                if (coachDisplay != null) append("  ·  $coachDisplay")
             }
-            coaches != null -> "$coaches coaches"
+            coachDisplay != null -> coachDisplay
             else -> ""
         }
         binding.tvRsid.text = rsidLine
@@ -689,6 +809,56 @@ class ServiceDetailActivity : AppCompatActivity() {
         )
         binding.tvCancelledBanner.visibility =
             if (d.isCancelled || allSubsCanc || someSubsCanc) View.VISIBLE else View.GONE
+
+        // Split station info in unit card — show coach counts to each destination if known
+        if (splitTiploc.isNotEmpty()) {
+            val splitStationName = StationData.findByCrs(splitTiploc)?.name ?: splitTiploc
+            val allRoute = d.cifSubsequentCallingPoints.ifEmpty { d.subsequentCallingPoints }
+            val splitIdx = allRoute.indexOfFirst { it.crs == splitTiploc }
+            val beforeLen = if (splitIdx > 0) allRoute.subList(0, splitIdx).lastOrNull { (it.length ?: 0) > 0 }?.length else null
+            val afterLen  = if (splitIdx >= 0) allRoute.subList(splitIdx, allRoute.size).firstOrNull { (it.length ?: 0) > 0 }?.length else null
+            val splitLine = if (beforeLen != null && afterLen != null && beforeLen != afterLen) {
+                val mainDest = d.destination
+                val splitDest = splitToDestName.ifEmpty { splitToHeadcode }
+                "$afterLen coaches → $mainDest\n${beforeLen - afterLen} coaches → $splitDest"
+            } else {
+                buildString {
+                    append("✂ Splits at $splitStationName")
+                    if (splitToDestName.isNotEmpty()) append(" · $splitToHeadcode → $splitToDestName")
+                    else if (splitToHeadcode.isNotEmpty()) append(" · $splitToHeadcode continues")
+                }
+            }
+            binding.cardUnitHsp.visibility = View.VISIBLE
+            binding.tvSplitInfo.visibility = View.GONE
+        } else {
+            binding.tvSplitInfo.visibility = View.GONE
+        }
+
+        // Formed-from display (this service is a split-off portion)
+        val couplingTiploc = intent.getStringExtra(EXTRA_COUPLING_TIPLOC) ?: ""
+        val coupledFromHc  = intent.getStringExtra(EXTRA_COUPLED_FROM_HC) ?: ""
+        // couplingTiplocVar already set above
+        if (coupledFromHc.isNotEmpty() && couplingTiploc.isNotEmpty()) {
+            val stationName = StationData.findByCrs(couplingTiploc)?.name ?: couplingTiploc
+            binding.cardUnitHsp.visibility = View.VISIBLE
+            val couplingAssocType = intent.getStringExtra(EXTRA_COUPLING_ASSOC_TYPE) ?: ""
+            val formedLabel = if (couplingAssocType == "NP" || couplingAssocType == "JJ") "Joins with" else "Formed from"
+            binding.tvSplitInfo.text = "$formedLabel $coupledFromHc at $stationName"
+            binding.tvSplitInfo.visibility = View.VISIBLE
+            if (coupledFromUid.isNotEmpty()) {
+                binding.tvSplitInfo.setOnClickListener {
+                    ServiceDetailActivity.start(
+                        ctx         = this,
+                        serviceId   = coupledFromUid,
+                        headcode    = coupledFromHc,
+                        origin      = StationData.findByCrs(couplingTiploc)?.name ?: couplingTiploc,
+                        destination = cachedDetails?.destination ?: "",
+                        std         = "",
+                        queryCrs    = couplingTiploc
+                    )
+                }
+            }
+        }
     }
 
     // ── Share ─────────────────────────────────────────────────────────────────

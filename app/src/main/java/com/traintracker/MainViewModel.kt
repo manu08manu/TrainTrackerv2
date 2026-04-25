@@ -118,6 +118,8 @@ class MainViewModel : ViewModel() {
     /** Consist data fetched from the server allocation endpoint. Null until loaded. */
     private val _serverAllocation = MutableStateFlow<AllocationInfo?>(null)
     val serverAllocation: StateFlow<AllocationInfo?> = _serverAllocation.asStateFlow()
+    private val _splitAllocation = MutableStateFlow<AllocationInfo?>(null)
+    val splitAllocation: StateFlow<AllocationInfo?> = _splitAllocation.asStateFlow()
 
     private var detailTrainId = ""
     private var detailCallingPoints: List<CallingPoint> = emptyList()
@@ -163,6 +165,31 @@ class MainViewModel : ViewModel() {
     }
 
     fun refresh() { if (lastCrs.isNotEmpty()) doFetch() }
+
+    private val _nextService = MutableStateFlow<String>("")
+    val nextService: StateFlow<String> = _nextService.asStateFlow()
+    private val intlCrs = setOf("AMS","BXS","PBN","ROT")
+
+    fun fetchNextInternationalService(crs: String, boardType: BoardType) {
+        if (crs !in intlCrs) return
+        viewModelScope.launch {
+            try {
+                val services = when (boardType) {
+                    BoardType.ARRIVALS -> server.getArrivals(crs, 1440)
+                    else -> server.getDepartures(crs, 1440)
+                }
+                val next = services.firstOrNull()
+                _nextService.value = if (next != null) {
+                    val dest = next.destName?.ifEmpty { null } ?: next.destCrs ?: ""
+                    val orig = next.originName?.ifEmpty { null } ?: next.originCrs ?: ""
+                    if (boardType == BoardType.ARRIVALS)
+                        "Next arrival: ${next.scheduledTime} from $orig"
+                    else
+                        "Next departure: ${next.scheduledTime} to $dest"
+                } else ""
+            } catch (_: Exception) { _nextService.value = "" }
+        }
+    }
 
     private fun doFetch() {
         _uiState.value = UiState.Loading
@@ -281,7 +308,8 @@ class MainViewModel : ViewModel() {
 
     private suspend fun buildServerBoard(): UiState {
         val stationName   = StationData.findByCrs(lastCrs)?.name ?: lastCrs
-        val windowMinutes = 30
+        val intlCrs = setOf("AMS","BXS","PBN","ROT")
+        val windowMinutes = if (lastCrs in intlCrs) 240 else 30
         val offset        = _timeOffset.value
 
         val serverDeps = if (lastBoardType == BoardType.DEPARTURES)
@@ -345,8 +373,12 @@ class MainViewModel : ViewModel() {
         val h            = s.headcode.uppercase()
         val operatorName = TocData.get(s.atocCode)?.name ?: ""
 
-        val originName = s.originCrs?.let { StationData.findByCrs(it)?.name } ?: s.originCrs ?: ""
-        val destName   = s.destCrs?.let { StationData.findByCrs(it)?.name } ?: s.destCrs ?: ""
+        val originName = s.originName?.ifEmpty { null }
+            ?: s.originCrs?.let { StationData.findByCrs(it)?.name }
+            ?: s.originCrs ?: ""
+        val destName   = s.destName?.ifEmpty { null }
+            ?: s.destCrs?.let { StationData.findByCrs(it)?.name }
+            ?: s.destCrs ?: ""
 
         val formation    = formationCache.get(h.uppercase()) ?: formationCache.get(s.uid.uppercase())
         val units        = formation?.units ?: existing?.units ?: emptyList()
@@ -402,9 +434,12 @@ class MainViewModel : ViewModel() {
             splitTiplocName      = s.splitTiplocName,
             splitToHeadcode      = s.splitToHeadcode,
             splitToUid           = s.splitToUid,
+            splitToDestName      = s.splitToDestName,
             couplingTiploc       = s.couplingTiploc,
             couplingTiplocName   = s.couplingTiplocName,
+            coupledFromUid       = s.coupledFromUid,
             coupledFromHeadcode  = s.coupledFromHeadcode,
+            couplingAssocType    = s.couplingAssocType,
             formsUid             = s.formsUid,
             formsHeadcode        = s.formsHeadcode
         )
@@ -519,7 +554,9 @@ class MainViewModel : ViewModel() {
                 if (hspResult != null) {
                     val callingPoints = hspResult.locations.map { loc ->
                         val crs  = loc.crs
-                        val name = StationData.findByCrs(crs)?.name ?: loc.name.ifEmpty { loc.tiploc }
+                        val name = loc.name.ifEmpty { null }
+                            ?: StationData.findByCrs(crs)?.name
+                            ?: loc.tiploc
                         val actualTime = loc.actualDep.ifEmpty { loc.actualArr }
                         val schedTime  = loc.scheduledDep.ifEmpty { loc.scheduledArr }
                         val etDisplay  = when {
@@ -616,6 +653,7 @@ class MainViewModel : ViewModel() {
         _detailLiveState.value = DetailLiveState()
         _hspSummary.value = null
         _serverAllocation.value = null
+        _splitAllocation.value = null
     }
 
     // ── HSP punctuality (via server) ──────────────────────────────────────────
@@ -647,6 +685,21 @@ class MainViewModel : ViewModel() {
                     _hspSummary.value = summary
                 }
             } catch (_: Exception) {}
+        }
+    }
+
+    // ── Split portion allocation ──────────────────────────────────────────────
+    fun fetchSplitAllocation(uid: String, date: String) {
+        if (!server.isEnabled || uid.isEmpty()) { Log.d("MainViewModel", "fetchSplitAllocation skipped: enabled=${server.isEnabled} uid=$uid"); return }
+        viewModelScope.launch {
+            try {
+                Log.d("MainViewModel", "fetchSplitAllocation: fetching uid=$uid date=$date")
+                val info = server.getAllocation("", date, uid)
+                Log.d("MainViewModel", "fetchSplitAllocation: result=$info")
+                if (info != null) _splitAllocation.value = info
+            } catch (e: Exception) {
+                Log.e("MainViewModel", "fetchSplitAllocation: ${e.message}", e)
+            }
         }
     }
 

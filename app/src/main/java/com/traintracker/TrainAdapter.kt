@@ -297,9 +297,10 @@ class TrainAdapter(
             }
 
             // Split info
-            val splitLine = if (s.splitToHeadcode.isNotEmpty()) {
-                val at = s.splitTiplocName.ifEmpty { s.splitTiploc }.ifEmpty { "?" }
-                "✂ Splits at $at → ${s.splitToHeadcode}"
+            val splitLine = if (s.splitTiploc.isNotEmpty()) {
+                val at = s.splitTiplocName.ifEmpty { s.splitTiploc }
+                if (s.splitToHeadcode.isNotEmpty()) "✂ Splits at $at → ${s.splitToHeadcode}"
+                else "✂ Splits at $at"
             } else ""
             b.tvSplitInfo.text       = splitLine
             b.tvSplitInfo.visibility = if (splitLine.isNotEmpty()) View.VISIBLE else View.GONE
@@ -323,9 +324,11 @@ class TrainAdapter(
             }
 
             // Coupling info
-            val couplingLine = if (s.coupledFromHeadcode.isNotEmpty()) {
-                val at = s.couplingTiplocName.ifEmpty { s.couplingTiploc }.ifEmpty { "?" }
-                "🔗 Joins with ${s.coupledFromHeadcode} at $at"
+            val couplingLine = if (s.couplingTiploc.isNotEmpty()) {
+                val atRaw = s.couplingTiplocName.ifEmpty { s.couplingTiploc }
+            val at = StationData.findByCrs(atRaw)?.name ?: StationData.findByCrs(s.couplingTiploc)?.name ?: atRaw
+                if (s.coupledFromHeadcode.isNotEmpty()) if (s.couplingAssocType == "NP" || s.couplingAssocType == "JJ") "🔗 Joins with ${s.coupledFromHeadcode} at $at" else "🔗 Formed from ${s.coupledFromHeadcode} at $at"
+                else "🔗 Joins at $at"
             } else ""
             b.tvCouplingInfo.text       = couplingLine
             b.tvCouplingInfo.visibility = if (couplingLine.isNotEmpty()) View.VISIBLE else View.GONE

@@ -21,21 +21,10 @@ data class CallingPointRow(
     val isFirst: Boolean,
     val isLast: Boolean,
     val isDetailed: Boolean,
-    /** Station the train has already departed from (TRUST confirmed) */
     val hasPassed: Boolean = false,
-    /** The train is currently at or between this and the next stop */
     val isCurrent: Boolean = false,
-    /**
-     * Non-null when the train length changes at this stop — indicates a split or join.
-     * e.g. "Train divides here · 6 coaches continue" or "Train joins here · 12 coaches"
-     */
     val splitJoinNote: String? = null,
-    /**
-     * True for the synthetic divider row injected between the last passed stop
-     * and the next upcoming stop. The [point] field is unused for divider rows.
-     */
     val isTrainHereDivider: Boolean = false,
-    /** Delay in minutes to display on the divider badge, 0 = on time / unknown */
     val dividerDelayMins: Int = 0
 )
 
@@ -45,7 +34,12 @@ class CallingPointAdapter(
     var showDetailed: Boolean = false,
     private val onStationClick: ((CallingPoint) -> Unit)? = null,
     private val splitTiploc: String = "",
-    private val splitToHeadcode: String = ""
+    private val splitToHeadcode: String = "",
+    private val splitToDestName: String = "",
+    private val splitToUid: String = "",
+    private val onSplitClick: ((headcode: String, uid: String) -> Unit)? = null,
+    private val couplingTiplocCrs: String = "",
+    private val coupledFromHc: String = ""
 ) : ListAdapter<CallingPointRow, RecyclerView.ViewHolder>(DIFF) {
 
     private var colourOnSurface = 0
@@ -74,8 +68,6 @@ class CallingPointAdapter(
         }
     }
 
-    // ── ViewHolder types ──────────────────────────────────────────────────────
-
     inner class StopViewHolder(private val b: ItemCallingPointBinding) :
         RecyclerView.ViewHolder(b.root) {
 
@@ -83,7 +75,38 @@ class CallingPointAdapter(
             val pt         = row.point
             val isDetailed = row.isDetailed
 
-            // ── Station name ──────────────────────────────────────────────────
+            // Coach count / split-join note — shown in all modes
+            val note = row.splitJoinNote
+            when {
+                note != null -> {
+                    b.tvLength.text = note
+                    b.tvLength.visibility = View.VISIBLE
+                }
+                pt.length != null && pt.length > 0 -> {
+                    b.tvLength.text = b.root.context.getString(R.string.coach_count_label, pt.length)
+                    b.tvLength.visibility = View.VISIBLE
+                }
+                else -> b.tvLength.visibility = View.GONE
+            }
+
+            // Branch split indicator — shown in all modes
+            val isSplitStation = splitTiploc.isNotEmpty() && pt.crs == splitTiploc
+            if (isSplitStation) {
+                b.layoutSplitBranch.visibility = View.VISIBLE
+                val destPart = if (splitToDestName.isNotEmpty()) " \u2192 $splitToDestName" else ""
+                b.tvSplitNote.text = if (splitToHeadcode.isNotEmpty()) "$splitToHeadcode$destPart" else "splits here"
+                if (onSplitClick != null && splitToHeadcode.isNotEmpty()) {
+                    b.layoutSplitBranch.setOnClickListener { onSplitClick.invoke(splitToHeadcode, splitToUid) }
+                    b.layoutSplitBranch.isClickable = true
+                } else {
+                    b.layoutSplitBranch.setOnClickListener(null)
+                    b.layoutSplitBranch.isClickable = false
+                }
+            } else {
+                b.layoutSplitBranch.visibility = View.GONE
+            }
+
+            // Station name
             val isTiploc = pt.crs.isEmpty() && pt.locationName.matches(Regex("[A-Z0-9]{4,7}"))
             if (isTiploc) {
                 val span = SpannableString(pt.locationName)
@@ -143,26 +166,6 @@ class CallingPointAdapter(
                 } else {
                     b.tvDelayMin.visibility = View.GONE
                 }
-                val note = row.splitJoinNote
-                when {
-                    note != null -> {
-                        b.tvLength.text = note
-                        b.tvLength.visibility = View.VISIBLE
-                    }
-                    pt.length != null && pt.length > 0 -> {
-                        b.tvLength.text = b.root.context.getString(R.string.coach_count_label, pt.length)
-                        b.tvLength.visibility = View.VISIBLE
-                    }
-                    else -> b.tvLength.visibility = View.GONE
-                }
-                // Branch split indicator
-                val isSplitStation = splitTiploc.isNotEmpty() && pt.crs == splitTiploc && splitToHeadcode.isNotEmpty()
-                if (isSplitStation) {
-                    b.layoutSplitBranch.visibility = View.VISIBLE
-                    b.tvSplitNote.text = splitToHeadcode
-                } else {
-                    b.layoutSplitBranch.visibility = View.GONE
-                }
                 if (pt.platform.isNotEmpty()) {
                     b.tvPlatform.text = b.root.context.getString(R.string.platform_label, pt.platform)
                     b.tvPlatform.visibility = View.VISIBLE
@@ -194,7 +197,6 @@ class CallingPointAdapter(
                 } else {
                     b.tvPlatform.visibility = View.GONE
                 }
-                if (row.splitJoinNote == null) b.tvLength.visibility = View.GONE
             }
 
             when {
@@ -212,7 +214,7 @@ class CallingPointAdapter(
             b.lineTop.visibility    = if (row.isFirst) View.INVISIBLE else View.VISIBLE
             b.lineBottom.visibility = if (row.isLast)  View.INVISIBLE else View.VISIBLE
 
-            val isHighlighted = pt.crs == highlightCrs || row.isCurrent
+            val isHighlighted = highlightCrs.isNotEmpty() && (pt.crs == highlightCrs || row.isCurrent)
             val rowAlpha = when {
                 row.hasPassed -> 0.55f
                 pt.isPassing  -> 0.5f
@@ -245,7 +247,7 @@ class CallingPointAdapter(
                 b.tvStation.paintFlags = b.tvStation.paintFlags and Paint.STRIKE_THRU_TEXT_FLAG.inv()
             }
 
-            if (!pt.isPassing && onStationClick != null) {
+            if (onStationClick != null && pt.crs.isNotEmpty()) {
                 b.root.setOnClickListener { onStationClick.invoke(pt) }
                 b.root.isClickable = true
             } else {
@@ -268,8 +270,6 @@ class CallingPointAdapter(
         }
     }
 
-    // ── Adapter overrides ─────────────────────────────────────────────────────
-
     override fun getItemViewType(position: Int): Int =
         if (getItem(position).isTrainHereDivider) TYPE_DIVIDER else TYPE_STOP
 
@@ -290,7 +290,9 @@ class CallingPointAdapter(
                 )
                 if (!coloursReady) {
                     val ctx = parent.context
-                    colourOnSurface = MaterialColors.getColor(parent, com.google.android.material.R.attr.colorOnSurface)
+                    val typedArray = ctx.theme.obtainStyledAttributes(intArrayOf(android.R.attr.textColorPrimary))
+                    colourOnSurface = typedArray.getColor(0, 0xFF000000.toInt())
+                    typedArray.recycle()
                     colourCancelled = ContextCompat.getColor(ctx, R.color.status_cancelled)
                     colourDelayed   = ContextCompat.getColor(ctx, R.color.status_delayed)
                     colourOnTime    = ContextCompat.getColor(ctx, R.color.status_ontime)
@@ -313,23 +315,22 @@ class CallingPointAdapter(
         }
     }
 
-    // ── submitFiltered ────────────────────────────────────────────────────────
-
-    /**
-     * Builds the row list from calling points.
-     * - Marks stops as passed based on [passedCrs] (set of CRS codes with confirmed departures)
-     * - Injects a TRAIN_HERE divider row immediately before the first un-departed stop
-     * - The divider carries the current [delayMins] for display
-     */
     fun submitFiltered(
         points: List<CallingPoint>,
         passedCrs: Set<String> = emptySet(),
         currentCrs: String = "",
         delayMins: Int = 0
     ) {
-        val filtered = if (showPassing) points else points.filter { !it.isPassing }
+        val nonPassengerKeywords = setOf("junction", "loop", "yard", "siding", "sidings", "depot", "headquarters", "reception", "neck", "jn", "sdg")
+        val filtered = if (showPassing) points else points.filter { pt ->
+            !pt.isPassing && (
+                    pt.crs.isNotEmpty() ||
+                            (pt.locationName.isNotEmpty() &&
+                                    nonPassengerKeywords.none { kw -> pt.locationName.lowercase().contains(kw) } &&
+                                    !pt.locationName.matches(Regex("[A-Z0-9]{4,8}")))
+                    )
+        }
 
-        // currentIdx = first stop the train has NOT yet departed from
         val currentIdx = when {
             currentCrs.isNotEmpty() -> filtered.indexOfFirst { it.crs == currentCrs }
             passedCrs.isNotEmpty()  -> {
@@ -342,12 +343,10 @@ class CallingPointAdapter(
         val rows = mutableListOf<CallingPointRow>()
 
         filtered.forEachIndexed { i, pt ->
-            // Inject the train-here divider immediately before the current stop,
-            // but only if there are passed stops above it (so divider isn't at top)
             if (i == currentIdx && currentIdx > 0 && passedCrs.isNotEmpty()) {
                 rows.add(
                     CallingPointRow(
-                        point              = pt,   // unused by DividerViewHolder
+                        point              = pt,
                         isFirst            = false,
                         isLast             = false,
                         isDetailed         = showDetailed,
@@ -357,14 +356,14 @@ class CallingPointAdapter(
                 )
             }
 
-            // Split/join detection
             val prevLength = (i - 1 downTo 0)
                 .map { filtered[it].length }
                 .firstOrNull { (it ?: 0) > 0 }
             val thisLength = pt.length?.takeIf { it > 0 }
             val note: String? = when {
-                splitTiploc.isNotEmpty() && pt.crs == splitTiploc && splitToHeadcode.isNotEmpty() ->
-                    "✂ Splits here · $splitToHeadcode continues"
+                splitTiploc.isNotEmpty() && pt.crs == splitTiploc -> null
+                couplingTiplocCrs.isNotEmpty() && pt.crs == couplingTiplocCrs ->
+                    if (coupledFromHc.isNotEmpty()) "\uD83D\uDD17 $coupledFromHc joins here" else "\uD83D\uDD17 joins here"
                 prevLength != null && thisLength != null && prevLength > thisLength ->
                     "⚡ Train divides · $thisLength coaches continue"
                 prevLength != null && thisLength != null && prevLength < thisLength ->
