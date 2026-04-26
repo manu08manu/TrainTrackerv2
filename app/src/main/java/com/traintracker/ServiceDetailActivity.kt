@@ -34,6 +34,7 @@ class ServiceDetailActivity : AppCompatActivity() {
     private var coupledFromHcVar   = ""
     private var trainHeadcode = ""
     private var destCrs       = ""   // for HSP lookup
+    private var serviceId     = ""
 
     // ── Server API — TRUST polling handled by MainViewModel.startServerTrustPolling ──
 
@@ -125,7 +126,7 @@ class ServiceDetailActivity : AppCompatActivity() {
         binding.toolbar.setNavigationOnClickListener { finish() }
         binding.btnShare.setOnClickListener { shareCurrentService() }
 
-        val serviceId    = intent.getStringExtra(EXTRA_SERVICE_ID) ?: run { finish(); return }
+        serviceId        = intent.getStringExtra(EXTRA_SERVICE_ID) ?: run { finish(); return }
         trainHeadcode    = intent.getStringExtra(EXTRA_HEADCODE) ?: ""
         val origin       = intent.getStringExtra(EXTRA_ORIGIN)   ?: ""
         val dest         = resolveLocationName(intent.getStringExtra(EXTRA_DEST) ?: "")
@@ -259,6 +260,7 @@ class ServiceDetailActivity : AppCompatActivity() {
         observeHsp()
         observeServerAllocation()
         observeSplitAllocation()
+        observeCoupledFromUid()
     }
 
     override fun onDestroy() {
@@ -307,6 +309,17 @@ class ServiceDetailActivity : AppCompatActivity() {
                             }
                             bindHeader(mergedDetails, boardUnits, boardCoaches)
                             rebuildAdapter(mergedDetails)
+                            // If coupledFromUid wasn't passed via intent, fetch it from the board
+                            if (coupledFromUid.isEmpty()) {
+                                val boardStd2 = intent.getStringExtra(EXTRA_STD) ?: ""
+                                val stdFmt2   = formatTimeFromIso(boardStd2).ifEmpty { boardStd2 }
+                                val stdHour2  = stdFmt2.substringBefore(":").toIntOrNull() ?: 12
+                                val nowHour2  = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+                                val svcDate2  = if (stdHour2 < 6 && nowHour2 >= 20)
+                                    java.time.LocalDate.now().minusDays(1).toString()
+                                else java.time.LocalDate.now().toString()
+                                viewModel.fetchCoupledFromIfNeeded(serviceId, trainHeadcode, svcDate2)
+                            }
                         }
                         is DetailState.Error   -> {
                             binding.progressBar.visibility  = View.GONE
@@ -373,7 +386,13 @@ class ServiceDetailActivity : AppCompatActivity() {
                         return@collect
                     }
                     android.util.Log.d("ServiceDetail", "serverAllocation: binding units=${info.units} coaches=${info.coachCount}")
-                    bindUnitInfo(info.units, info.coachCount)
+                    val existingSplit = viewModel.splitAllocation.value
+                    val isCoupling = coupledFromUid.isNotEmpty()
+                    if (existingSplit != null) {
+                        bindUnitInfo(info.units, info.coachCount, existingSplit.units, isCoupling)
+                    } else {
+                        bindUnitInfo(info.units, info.coachCount)
+                    }
                     val d = cachedDetails
                     val boardUnits   = intent.getStringArrayListExtra(EXTRA_UNITS) ?: emptyList()
                     val boardCoaches = intent.getIntExtra(EXTRA_COACHES, 0).takeIf { it in 1..20 } ?: 0
@@ -494,7 +513,18 @@ class ServiceDetailActivity : AppCompatActivity() {
             }
             binding.tvUnitAllocationLabel.text = getString(R.string.label_unit_allocation)
             binding.tvUnitAllocationLabel.visibility = View.VISIBLE
-            binding.tvUnitAllocation.text = classTractionLine.ifEmpty { unitLine }
+            // For JJ joins, show only the pre-coupling units + their coach count in the header line
+            val continueUnitsEarly = if (isCoupling && splitUnits.isNotEmpty())
+                units.filter { it !in splitUnits } else units
+            val preCoachCount = if (isCoupling && splitUnits.isNotEmpty() && units.isNotEmpty())
+                coachCount - (splitUnits.size * (coachCount / units.size)) else coachCount
+            val preUnitLine = buildString {
+                append(continueUnitsEarly.joinToString(" + "))
+                if (hasCoaches) append("  ·  ${preCoachCount}c")
+            }
+            val headerLine = if (classTractionLine.isNotEmpty() && isCoupling && splitUnits.isNotEmpty())
+                "$classTractionLine  ·  ${preCoachCount}c" else classTractionLine.ifEmpty { preUnitLine }
+            binding.tvUnitAllocation.text = headerLine
             binding.tvUnitAllocation.visibility = View.VISIBLE
             // Split/join unit breakdown — one line per unit with destination and coach count
             val continueUnits = units.filter { it !in splitUnits }
@@ -708,6 +738,22 @@ class ServiceDetailActivity : AppCompatActivity() {
     // ── Header ────────────────────────────────────────────────────────────────
 
     private fun bindHeader(d: ServiceDetails, boardUnits: List<String>, boardCoaches: Int) {
+        // Update title with server-resolved origin/destination (important when launched with empty strings)
+        val allPoints = (d.previousCallingPoints + d.subsequentCallingPoints)
+            .ifEmpty { d.cifPreviousCallingPoints + d.cifSubsequentCallingPoints }
+        val headerOrigin = d.origin.ifEmpty {
+            intent.getStringExtra(EXTRA_ORIGIN)?.ifEmpty { null }
+                ?: allPoints.firstOrNull()?.locationName ?: ""
+        }
+        val headerDest = d.destination.ifEmpty {
+            intent.getStringExtra(EXTRA_DEST)?.ifEmpty { null }
+                ?: allPoints.lastOrNull()?.locationName ?: ""
+        }
+        val headerSplitDest = splitToDestName.ifEmpty { null }
+        val headerTitleDest = if (headerSplitDest != null) "$headerDest / $headerSplitDest" else headerDest
+        if (headerOrigin.isNotEmpty() || headerTitleDest.isNotEmpty()) {
+            binding.tvServiceTitle.text = getString(R.string.service_title_route, resolveLocationName(headerOrigin), headerTitleDest)
+        }
         val logoName = TocData.logoDrawableName(d.operatorCode).ifEmpty { TocData.logoDrawableName(d.operator) }
         val resId    = TocData.logoDrawableRes(logoName, this)
         if (resId != 0) {
@@ -840,11 +886,35 @@ class ServiceDetailActivity : AppCompatActivity() {
                         ctx         = this,
                         serviceId   = coupledFromUid,
                         headcode    = coupledFromHc,
-                        origin      = StationData.findByCrs(couplingTiploc)?.name ?: couplingTiploc,
-                        destination = cachedDetails?.destination ?: "",
+                        origin      = "",
+                        destination = "",
                         std         = "",
                         queryCrs    = couplingTiploc
                     )
+                }
+            }
+        }
+    }
+
+    // ── Coupled-from UID observer ─────────────────────────────────────────────
+    private fun observeCoupledFromUid() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.couplingInfo.collect { info ->
+                    if (info != null && coupledFromUid.isEmpty()) {
+                        coupledFromUid    = info.uid
+                        coupledFromHcVar  = info.headcode
+                        couplingTiplocVar = info.tiplocName
+                        // Re-bind header to show coupling info
+                        val d = cachedDetails ?: return@collect
+                        val boardUnits   = intent.getStringArrayListExtra(EXTRA_UNITS) ?: emptyList()
+                        val boardCoaches = intent.getIntExtra(EXTRA_COACHES, 0).takeIf { it in 1..20 } ?: 0
+                        bindHeader(d, boardUnits, boardCoaches)
+                        // Re-trigger split allocation binding
+                        val mainInfo = viewModel.serverAllocation.value ?: return@collect
+                        val splitInfo = viewModel.splitAllocation.value ?: return@collect
+                        bindUnitInfo(mainInfo.units, mainInfo.coachCount, splitInfo.units, true)
+                    }
                 }
             }
         }

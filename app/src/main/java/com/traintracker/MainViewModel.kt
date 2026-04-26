@@ -936,4 +936,36 @@ class MainViewModel : ViewModel() {
             )
         }
     }
+
+    // ── Fetch coupling partner UID when not passed via intent ─────────────────
+    private val _coupledFromUid = MutableStateFlow("")
+    val coupledFromUidState: StateFlow<String> = _coupledFromUid.asStateFlow()
+
+    data class CouplingInfo(val uid: String, val headcode: String, val tiploc: String, val tiplocName: String, val assocType: String)
+    private val _couplingInfo = MutableStateFlow<CouplingInfo?>(null)
+    val couplingInfo: StateFlow<CouplingInfo?> = _couplingInfo.asStateFlow()
+
+    fun fetchCoupledFromIfNeeded(uid: String, headcode: String, serviceDate: String) {
+        if (!server.isEnabled || uid.isEmpty() || headcode.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                val services = server.getHeadcodeBoard(headcode)
+                val match = services?.firstOrNull { it.uid == uid }
+                if (match != null && match.coupledFromUid.isNotEmpty()) {
+                    Log.d("MainViewModel", "fetchCoupledFromIfNeeded: found coupledFromUid=${match.coupledFromUid} for $uid")
+                    _coupledFromUid.value = match.coupledFromUid
+                    _couplingInfo.value = CouplingInfo(
+                        uid = match.coupledFromUid,
+                        headcode = match.coupledFromHeadcode,
+                        tiploc = match.couplingTiploc,
+                        tiplocName = match.couplingTiplocName ?: match.couplingTiploc,
+                        assocType = match.couplingAssocType
+                    )
+                    fetchSplitAllocation(match.coupledFromUid, serviceDate)
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+
 }
