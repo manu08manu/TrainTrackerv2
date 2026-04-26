@@ -18,3 +18,4 @@ script.js
 styles.css
 *.xml.descriptions
 .descriptions.xml
+.gradle/
