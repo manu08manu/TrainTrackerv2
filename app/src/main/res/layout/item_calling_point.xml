@@ -99,6 +99,17 @@
                 android:textStyle="bold"
                 android:fontFamily="monospace"/>
 
+            <!-- Delay badge — inline after actual time -->
+            <TextView
+                android:id="@+id/tvDelayMin"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:textSize="11sp"
+                android:textColor="@color/status_delayed"
+                android:textStyle="bold"
+                android:visibility="gone"/>
+
         </LinearLayout>
 
         <!-- Row 2: Detailed extras — arr/dep label, delay, platform, coaches -->
@@ -117,15 +128,6 @@
                 android:textSize="11sp"
                 android:textColor="?attr/colorOnSurfaceVariant"
                 android:textStyle="italic"
-                android:visibility="gone"/>
-
-            <TextView
-                android:id="@+id/tvDelayMin"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textSize="11sp"
-                android:textColor="@color/status_delayed"
-                android:textStyle="bold"
                 android:visibility="gone"/>
 
             <TextView
