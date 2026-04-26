@@ -116,6 +116,7 @@ class ServiceDetailActivity : AppCompatActivity() {
         }
     }
 
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityServiceDetailBinding.inflate(layoutInflater)
@@ -182,6 +183,9 @@ class ServiceDetailActivity : AppCompatActivity() {
         val titleDest = if (splitToDestName.isNotEmpty()) "$dest / $splitToDestName" else dest
         binding.tvServiceTitle.text = getString(R.string.service_title_route, resolveLocationName(origin), titleDest)
         binding.rvCallingPoints.layoutManager = LinearLayoutManager(this)
+        binding.rvCallingPoints.isNestedScrollingEnabled = false
+        // Force RecyclerView to lay out all items at once so NestedScrollView can scroll
+        binding.rvCallingPoints.setHasFixedSize(false)
 
         binding.chipSimple.setOnClickListener {
             if (showDetailed) {
@@ -858,10 +862,8 @@ class ServiceDetailActivity : AppCompatActivity() {
 
         // Split station info in unit card — show coach counts to each destination if known
         if (splitTiploc.isNotEmpty()) {
-            val splitStationName = StationData.findByCrs(splitTiploc)?.name ?: splitTiploc
             val allRoute = d.cifSubsequentCallingPoints.ifEmpty { d.subsequentCallingPoints }
             val splitIdx = allRoute.indexOfFirst { it.crs == splitTiploc }
-            val beforeLen = if (splitIdx > 0) allRoute.subList(0, splitIdx).lastOrNull { (it.length ?: 0) > 0 }?.length else null
             val afterLen  = if (splitIdx >= 0) allRoute.subList(splitIdx, allRoute.size).firstOrNull { (it.length ?: 0) > 0 }?.length else null
             binding.cardUnitHsp.visibility = View.VISIBLE
             binding.tvSplitInfo.visibility = View.GONE

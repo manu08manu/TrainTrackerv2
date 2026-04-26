@@ -62,6 +62,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+
     // ─── onCreate ─────────────────────────────────────────────────────────────
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -139,6 +140,7 @@ class MainActivity : AppCompatActivity() {
             }
         )
         binding.rvTrains.layoutManager = LinearLayoutManager(this)
+        binding.swipeRefresh.isEnabled = false
         binding.rvTrains.adapter = adapter
         binding.swipeRefresh.setOnRefreshListener {
             when (currentSearchMode) {
