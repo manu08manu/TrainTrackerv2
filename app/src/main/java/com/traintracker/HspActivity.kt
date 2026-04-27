@@ -333,7 +333,7 @@ class HspActivity : AppCompatActivity() {
     }
 
 
-    override fun onSaveInstanceState(outState: android.os.Bundle) {
+    override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putString("fromCrs", fromCrs)
         outState.putString("toCrs", toCrs)

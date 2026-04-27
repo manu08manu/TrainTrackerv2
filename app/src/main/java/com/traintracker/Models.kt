@@ -254,8 +254,7 @@ data class UnitAllocation(
     val tractionType: String,         // e.g. "EMU"
     val coachCount: Int,
     val multipleUnits: Boolean = false
-) {
-}
+)
 
 // ─── BoardResult ──────────────────────────────────────────────────────────────
 

@@ -296,7 +296,7 @@ class ServiceDetailActivity : AppCompatActivity() {
                             // calling points at all (server has no data) — otherwise trust the
                             // per-stop isCancelled flags from the service endpoint
                             val serverHasData = state.details.cifSubsequentCallingPoints.isNotEmpty()
-                                || state.details.subsequentCallingPoints.isNotEmpty()
+                                    || state.details.subsequentCallingPoints.isNotEmpty()
                             var mergedDetails = if (boardCancelled && !state.details.isCancelled && !serverHasData)
                                 state.details.copy(isCancelled = true) else state.details
                             // Use board cancel reason if service detail doesn't have one
@@ -691,8 +691,8 @@ class ServiceDetailActivity : AppCompatActivity() {
                     it.isCancelled || it.et.equals("Cancelled", ignoreCase = true)
                 }
         val someSubsCanc = !allSubsCanc && subsForCanc.any {
-                    it.isCancelled || it.et.equals("Cancelled", ignoreCase = true)
-                }
+            it.isCancelled || it.et.equals("Cancelled", ignoreCase = true)
+        }
         val partialCanc1 = !live.isCancelled && !d.isCancelled && someSubsCanc
         binding.tvCancelledBanner.text = getString(
             if (partialCanc1) R.string.service_partially_cancelled_banner
@@ -860,16 +860,11 @@ class ServiceDetailActivity : AppCompatActivity() {
         binding.tvCancelledBanner.visibility =
             if (d.isCancelled || allSubsCanc || someSubsCanc) View.VISIBLE else View.GONE
 
-        // Split station info in unit card — show coach counts to each destination if known
+        // Split station info in unit card — coach-count-per-destination shown via bindUnitInfo
         if (splitTiploc.isNotEmpty()) {
-            val allRoute = d.cifSubsequentCallingPoints.ifEmpty { d.subsequentCallingPoints }
-            val splitIdx = allRoute.indexOfFirst { it.crs == splitTiploc }
-            val afterLen  = if (splitIdx >= 0) allRoute.subList(splitIdx, allRoute.size).firstOrNull { (it.length ?: 0) > 0 }?.length else null
             binding.cardUnitHsp.visibility = View.VISIBLE
-            binding.tvSplitInfo.visibility = View.GONE
-        } else {
-            binding.tvSplitInfo.visibility = View.GONE
         }
+        binding.tvSplitInfo.visibility = View.GONE
 
         // Formed-from display (this service is a split-off portion)
         val couplingTiploc = intent.getStringExtra(EXTRA_COUPLING_TIPLOC) ?: ""
