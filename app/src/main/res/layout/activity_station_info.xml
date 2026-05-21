@@ -151,6 +151,7 @@
                     <TextView android:id="@+id/tvInductionLoop"               android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
                     <TextView android:id="@+id/tvAccessibleTicketMachines"    android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
                     <TextView android:id="@+id/tvNationalKeyToilets"          android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
+                    <TextView android:id="@+id/tvHeightAdjustedCounter"       android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
                     <TextView android:id="@+id/tvImpairedMobilitySetDown"     android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
@@ -193,6 +194,9 @@
                     <TextView android:id="@+id/tvTrolleys"         android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
                     <TextView android:id="@+id/tvSeatedArea"       android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
                     <TextView android:id="@+id/tvFirstClassLounge" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
+                    <TextView android:id="@+id/tvTelephones"         android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
+                    <TextView android:id="@+id/tvPostBox"             android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
+                    <TextView android:id="@+id/tvShops"               android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
                     <TextView android:id="@+id/tvCustomerHelpPoints" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
@@ -224,8 +228,10 @@
                     android:orientation="vertical"
                     android:padding="12dp">
                     <TextView android:id="@+id/tvTaxi"    android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface"/>
+                    <TextView android:id="@+id/tvAccessibleTaxis" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
                     <TextView android:id="@+id/tvBus"     android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
                     <TextView android:id="@+id/tvAirport" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
+                    <TextView android:id="@+id/tvCycleHire" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
                     <TextView android:id="@+id/tvParking" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
                     <TextView android:id="@+id/tvCycle"   android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
                 </LinearLayout>

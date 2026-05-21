@@ -92,7 +92,11 @@ class StationInfoActivity : AppCompatActivity() {
 
     private fun bindStation(s: KbStation) {
         bindOrHide(binding.tvAddress, s.address)
-        bindOrHide(binding.tvStaffing, mapStaffing(s.staffingNote))
+        val staffingParts = listOfNotNull(
+            if (s.staffingNote.isNotEmpty()) s.staffingNote else null,
+            if (s.stationOperator.isNotEmpty()) "Operated by ${s.stationOperator}" else null
+        )
+        bindOrHide(binding.tvStaffing, if (staffingParts.isNotEmpty()) "👤 ${staffingParts.joinToString(" · ")}" else "")
 
         // ── Tickets ──────────────────────────────────────────────────────
         bindOrHide(binding.tvTicketOffice,
@@ -106,41 +110,43 @@ class StationInfoActivity : AppCompatActivity() {
             binding.tvTicketOffice, binding.tvSstm, binding.tvTicketGates)
 
         // ── Accessibility ─────────────────────────────────────────────────
-        bindOrHide(binding.tvStepFree,
+        bindExpandable(binding.tvStepFree,
             if (s.stepFreeAccess.isNotEmpty()) "♿ Step-free: ${s.stepFreeAccess}" else "")
         bindOrHide(binding.tvAssistance,
-            if (s.assistanceAvail.isNotEmpty()) "🤝 Assistance available: ${s.assistanceAvail}" else "")
+            if (s.assistanceAvail.isNotEmpty()) "🤝 Assistance: ${s.assistanceAvail}" else "")
         bindOrHide(binding.tvRamp,
             if (s.rampForTrainAccess.isNotEmpty()) "📐 Ramp for train access: ${s.rampForTrainAccess}" else "")
         bindOrHide(binding.tvWheelchairs,
             if (s.wheelchairsAvailable.isNotEmpty()) "🦽 Wheelchairs: ${s.wheelchairsAvailable}" else "")
         bindOrHide(binding.tvInductionLoop,
             if (s.inductionLoop.isNotEmpty()) "🔊 Induction loop: ${s.inductionLoop}" else "")
-        bindOrHide(binding.tvAccessibleTicketMachines,
+        bindExpandable(binding.tvAccessibleTicketMachines,
             if (s.accessibleTicketMachines.isNotEmpty()) "♿ Accessible ticket machines: ${s.accessibleTicketMachines}" else "")
-        bindOrHide(binding.tvNationalKeyToilets,
+        bindOrHide(binding.tvHeightAdjustedCounter,
+            if (s.heightAdjustedCounter.isNotEmpty()) "📋 Height-adjusted counter: ${s.heightAdjustedCounter}" else "")
+        bindExpandable(binding.tvNationalKeyToilets,
             if (s.nationalKeyToilets.isNotEmpty()) "🔑 National Key toilets: ${s.nationalKeyToilets}" else "")
-        bindOrHide(binding.tvImpairedMobilitySetDown,
+        bindExpandable(binding.tvImpairedMobilitySetDown,
             if (s.impairedMobilitySetDown.isNotEmpty()) "🚗 Mobility set-down: ${s.impairedMobilitySetDown}" else "")
         hideSectionIfEmpty(binding.tvHeaderAccessibility, binding.cardAccessibility,
             binding.tvStepFree, binding.tvAssistance, binding.tvRamp, binding.tvWheelchairs,
-            binding.tvInductionLoop, binding.tvAccessibleTicketMachines,
+            binding.tvInductionLoop, binding.tvAccessibleTicketMachines, binding.tvHeightAdjustedCounter,
             binding.tvNationalKeyToilets, binding.tvImpairedMobilitySetDown)
 
         // ── Facilities ────────────────────────────────────────────────────
         bindOrHide(binding.tvWifi,
             if (s.wifi.isNotEmpty()) "📶 WiFi: ${s.wifi}" else "")
-        bindOrHide(binding.tvToilets,
+        bindExpandable(binding.tvToilets,
             if (s.toilets.isNotEmpty()) "🚻 Toilets: ${s.toilets}" else "")
-        bindOrHide(binding.tvWaiting,
+        bindExpandable(binding.tvWaiting,
             if (s.waitingRoom.isNotEmpty()) "🪑 Waiting room: ${s.waitingRoom}" else "")
         bindOrHide(binding.tvCctv,
             if (s.cctv.isNotEmpty()) "📷 CCTV: ${s.cctv}" else "")
-        bindOrHide(binding.tvBabyChange,
+        bindExpandable(binding.tvBabyChange,
             if (s.babyChange.isNotEmpty()) "🍼 Baby change: ${s.babyChange}" else "")
         bindOrHide(binding.tvLeftLuggage,
             if (s.leftLuggage.isNotEmpty()) "🧳 Left luggage: ${s.leftLuggage}" else "")
-        bindOrHide(binding.tvStationBuffet,
+        bindExpandable(binding.tvStationBuffet,
             if (s.stationBuffet.isNotEmpty()) "☕ Food & drink: ${s.stationBuffet}" else "")
         bindOrHide(binding.tvShowers,
             if (s.showers.isNotEmpty()) "🚿 Showers: ${s.showers}" else "")
@@ -148,28 +154,40 @@ class StationInfoActivity : AppCompatActivity() {
             if (s.atmMachine.isNotEmpty()) "💳 ATM: ${s.atmMachine}" else "")
         bindOrHide(binding.tvTrolleys,
             if (s.trolleys.isNotEmpty()) "🛒 Trolleys: ${s.trolleys}" else "")
+        bindOrHide(binding.tvTelephones,
+            if (s.telephones.isNotEmpty()) "📞 Public phones: ${s.telephones}" else "")
+        bindOrHide(binding.tvPostBox,
+            if (s.postBox.isNotEmpty()) "📮 Post box: ${s.postBox}" else "")
+        bindExpandable(binding.tvShops,
+            if (s.shops.isNotEmpty()) "🛍 Shops: ${s.shops}" else "")
         bindOrHide(binding.tvSeatedArea,
             if (s.seatedArea.isNotEmpty()) "💺 Seated area: ${s.seatedArea}" else "")
-        bindOrHide(binding.tvFirstClassLounge,
+        bindExpandable(binding.tvFirstClassLounge,
             if (s.firstClassLounge.isNotEmpty()) "🥂 First class lounge: ${s.firstClassLounge}" else "")
-        bindOrHide(binding.tvCustomerHelpPoints,
+        bindExpandable(binding.tvCustomerHelpPoints,
             if (s.customerHelpPoints.isNotEmpty()) "ℹ Help points: ${s.customerHelpPoints}" else "")
         hideSectionIfEmpty(binding.tvHeaderFacilities, binding.cardFacilities,
             binding.tvWifi, binding.tvToilets, binding.tvWaiting, binding.tvCctv,
             binding.tvBabyChange, binding.tvLeftLuggage, binding.tvStationBuffet,
             binding.tvShowers, binding.tvAtmMachine, binding.tvTrolleys,
+            binding.tvTelephones, binding.tvPostBox, binding.tvShops,
             binding.tvSeatedArea, binding.tvFirstClassLounge, binding.tvCustomerHelpPoints)
 
         // ── Getting here ──────────────────────────────────────────────────
-        bindOrHide(binding.tvTaxi,
+        bindExpandable(binding.tvTaxi,
             if (s.taxi.isNotEmpty()) "🚕 Taxi: ${s.taxi}" else "")
-        bindOrHide(binding.tvBus,
+        bindExpandable(binding.tvAccessibleTaxis,
+            if (s.accessibleTaxis.isNotEmpty()) "♿🚕 Accessible taxis: ${s.accessibleTaxis}" else "")
+        bindExpandable(binding.tvBus,
             if (s.busInterchange.isNotEmpty()) "🚌 Bus interchange: ${s.busInterchange}" else "")
-        bindOrHide(binding.tvAirport,
+        bindExpandable(binding.tvAirport,
             if (s.airport.isNotEmpty()) "✈ Airport links: ${s.airport}" else "")
+        bindExpandable(binding.tvCycleHire,
+            if (s.cycleHire.isNotEmpty()) "🚲 Cycle hire: ${s.cycleHire}" else "")
         val parkingText = buildString {
             if (s.carParking.isNotEmpty()) append("🅿 ${s.carParking}")
-            if (s.carParkName.isNotEmpty()) append(" (${s.carParkName})")
+            if (s.carParkName.isNotEmpty()) append(" · ${s.carParkName}")
+            if (s.carParkOperator.isNotEmpty()) append(" (${s.carParkOperator})")
         }
         bindOrHide(binding.tvParking, parkingText)
         val cycleText = buildString {
@@ -178,7 +196,33 @@ class StationInfoActivity : AppCompatActivity() {
         }
         bindOrHide(binding.tvCycle, cycleText)
         hideSectionIfEmpty(binding.tvHeaderGettingHere, binding.cardGettingHere,
-            binding.tvTaxi, binding.tvBus, binding.tvAirport, binding.tvParking, binding.tvCycle)
+            binding.tvTaxi, binding.tvAccessibleTaxis, binding.tvBus,
+            binding.tvAirport, binding.tvCycleHire, binding.tvParking, binding.tvCycle)
+    }
+
+    /**
+     * Show [tv] with [text], truncating to [maxLines] lines with a "Show more" toggle.
+     * For short text (under threshold), behaves identically to bindOrHide.
+     */
+    private fun bindExpandable(tv: TextView, text: String, maxLines: Int = 3) {
+        if (text.isEmpty()) { tv.visibility = View.GONE; return }
+        tv.visibility = View.VISIBLE
+        tv.maxLines = maxLines
+        tv.ellipsize = android.text.TextUtils.TruncateAt.END
+        tv.text = text
+        tv.post {
+            if (tv.layout != null && tv.layout.lineCount > maxLines) {
+                tv.setOnClickListener {
+                    if (tv.maxLines == maxLines) {
+                        tv.maxLines = Int.MAX_VALUE
+                        tv.ellipsize = null
+                    } else {
+                        tv.maxLines = maxLines
+                        tv.ellipsize = android.text.TextUtils.TruncateAt.END
+                    }
+                }
+            }
+        }
     }
 
     /** Show [tv] with [text] if non-empty, making phone numbers and URLs clickable. */
@@ -219,7 +263,4 @@ class StationInfoActivity : AppCompatActivity() {
         header.visibility = if (allEmpty) View.GONE else View.VISIBLE
         card.visibility   = if (allEmpty) View.GONE else View.VISIBLE
     }
-
-    private fun mapStaffing(raw: String): String =
-        if (raw.trim().isEmpty()) "" else "👤 Staffing: $raw"
 }
