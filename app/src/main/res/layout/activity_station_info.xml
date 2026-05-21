@@ -42,25 +42,41 @@
             android:orientation="vertical"
             android:padding="16dp">
 
-            <!-- Address + phone -->
+            <!-- Station Alerts -->
+            <androidx.cardview.widget.CardView
+                android:id="@+id/cardAlerts"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:visibility="gone"
+                app:cardCornerRadius="8dp"
+                app:cardElevation="2dp"
+                app:cardBackgroundColor="#FFF3E0">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+                    <TextView
+                        android:id="@+id/tvAlerts"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textSize="12sp"
+                        android:textColor="#BF360C"/>
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <!-- Address -->
             <TextView
                 android:id="@+id/tvAddress"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:textSize="13sp"
                 android:textColor="?attr/colorOnSurfaceVariant"
-                android:layout_marginBottom="4dp"/>
-
-            <TextView
-                android:id="@+id/tvPhone"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textSize="13sp"
-                android:textColor="?attr/colorPrimary"
-                android:layout_marginBottom="16dp"
+                android:layout_marginBottom="4dp"
                 android:visibility="gone"/>
 
-            <!-- Staffing note -->
+            <!-- Staffing -->
             <TextView
                 android:id="@+id/tvStaffing"
                 android:layout_width="match_parent"
@@ -70,150 +86,148 @@
                 android:layout_marginBottom="16dp"
                 android:visibility="gone"/>
 
-            <!-- Section: Tickets -->
+            <!-- ── Tickets ── -->
             <TextView
+                android:id="@+id/tvHeaderTickets"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/info_tickets"
                 android:textSize="14sp"
                 android:textStyle="bold"
                 android:textColor="?attr/colorPrimary"
-                android:layout_marginBottom="6dp"/>
+                android:layout_marginBottom="6dp"
+                android:visibility="gone"/>
 
             <androidx.cardview.widget.CardView
+                android:id="@+id/cardTickets"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
+                android:visibility="gone"
                 app:cardCornerRadius="8dp"
                 app:cardElevation="2dp"
                 app:cardBackgroundColor="?attr/colorSurface">
-
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
                     android:padding="12dp">
-
-                    <TextView
-                        android:id="@+id/tvTicketOffice"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:textSize="12sp"
-                        android:textColor="?attr/colorOnSurface"/>
-
-                    <TextView
-                        android:id="@+id/tvSstm"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:textSize="12sp"
-                        android:textColor="?attr/colorOnSurface"
-                        android:layout_marginTop="4dp"/>
-
+                    <TextView android:id="@+id/tvTicketOffice"        android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface"/>
+                    <TextView android:id="@+id/tvSstm"                android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
+                    <TextView android:id="@+id/tvTicketGates"         android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
 
-            <!-- Section: Accessibility -->
+            <!-- ── Accessibility ── -->
             <TextView
+                android:id="@+id/tvHeaderAccessibility"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/info_accessibility"
                 android:textSize="14sp"
                 android:textStyle="bold"
                 android:textColor="?attr/colorPrimary"
-                android:layout_marginBottom="6dp"/>
+                android:layout_marginBottom="6dp"
+                android:visibility="gone"/>
 
             <androidx.cardview.widget.CardView
+                android:id="@+id/cardAccessibility"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
+                android:visibility="gone"
                 app:cardCornerRadius="8dp"
                 app:cardElevation="2dp"
                 app:cardBackgroundColor="?attr/colorSurface">
-
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
                     android:padding="12dp">
-
-                    <TextView
-                        android:id="@+id/tvStepFree"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:textSize="12sp"
-                        android:textColor="?attr/colorOnSurface"/>
-
-                    <TextView
-                        android:id="@+id/tvAssistance"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:textSize="12sp"
-                        android:textColor="?attr/colorOnSurface"
-                        android:layout_marginTop="4dp"/>
-
+                    <TextView android:id="@+id/tvStepFree"                   android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface"/>
+                    <TextView android:id="@+id/tvAssistance"                  android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
+                    <TextView android:id="@+id/tvRamp"                        android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
+                    <TextView android:id="@+id/tvWheelchairs"                 android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
+                    <TextView android:id="@+id/tvInductionLoop"               android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
+                    <TextView android:id="@+id/tvAccessibleTicketMachines"    android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
+                    <TextView android:id="@+id/tvNationalKeyToilets"          android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
+                    <TextView android:id="@+id/tvImpairedMobilitySetDown"     android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
 
-            <!-- Section: Facilities -->
+            <!-- ── Facilities ── -->
             <TextView
+                android:id="@+id/tvHeaderFacilities"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/info_facilities"
                 android:textSize="14sp"
                 android:textStyle="bold"
                 android:textColor="?attr/colorPrimary"
-                android:layout_marginBottom="6dp"/>
+                android:layout_marginBottom="6dp"
+                android:visibility="gone"/>
 
             <androidx.cardview.widget.CardView
+                android:id="@+id/cardFacilities"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
+                android:visibility="gone"
                 app:cardCornerRadius="8dp"
                 app:cardElevation="2dp"
                 app:cardBackgroundColor="?attr/colorSurface">
-
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
                     android:padding="12dp">
-
-                    <TextView android:id="@+id/tvWifi"       android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:textColor="?attr/colorOnSurface"/>
-                    <TextView android:id="@+id/tvToilets"    android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
-                    <TextView android:id="@+id/tvWaiting"    android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
-                    <TextView android:id="@+id/tvCctv"       android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
-
+                    <TextView android:id="@+id/tvWifi"             android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface"/>
+                    <TextView android:id="@+id/tvToilets"          android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
+                    <TextView android:id="@+id/tvWaiting"          android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
+                    <TextView android:id="@+id/tvCctv"             android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
+                    <TextView android:id="@+id/tvBabyChange"       android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
+                    <TextView android:id="@+id/tvLeftLuggage"      android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
+                    <TextView android:id="@+id/tvStationBuffet"    android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
+                    <TextView android:id="@+id/tvShowers"          android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
+                    <TextView android:id="@+id/tvAtmMachine"       android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
+                    <TextView android:id="@+id/tvTrolleys"         android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
+                    <TextView android:id="@+id/tvSeatedArea"       android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
+                    <TextView android:id="@+id/tvFirstClassLounge" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
+                    <TextView android:id="@+id/tvCustomerHelpPoints" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
 
-            <!-- Section: Getting here -->
+            <!-- ── Getting here ── -->
             <TextView
+                android:id="@+id/tvHeaderGettingHere"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/info_getting_here"
                 android:textSize="14sp"
                 android:textStyle="bold"
                 android:textColor="?attr/colorPrimary"
-                android:layout_marginBottom="6dp"/>
+                android:layout_marginBottom="6dp"
+                android:visibility="gone"/>
 
             <androidx.cardview.widget.CardView
+                android:id="@+id/cardGettingHere"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
+                android:visibility="gone"
                 app:cardCornerRadius="8dp"
                 app:cardElevation="2dp"
                 app:cardBackgroundColor="?attr/colorSurface">
-
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
                     android:padding="12dp">
-
-                    <TextView android:id="@+id/tvTaxi"       android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:textColor="?attr/colorOnSurface"/>
-                    <TextView android:id="@+id/tvBus"        android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
-                    <TextView android:id="@+id/tvParking"    android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
-
+                    <TextView android:id="@+id/tvTaxi"    android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface"/>
+                    <TextView android:id="@+id/tvBus"     android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
+                    <TextView android:id="@+id/tvAirport" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
+                    <TextView android:id="@+id/tvParking" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
+                    <TextView android:id="@+id/tvCycle"   android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:visibility="gone" android:textColor="?attr/colorOnSurface" android:layout_marginTop="4dp"/>
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
 

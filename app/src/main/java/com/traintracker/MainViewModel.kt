@@ -116,9 +116,10 @@ class MainViewModel : ViewModel() {
     val availableOperators: StateFlow<List<String>> = boardRepo.availableOperators
 
     // KB flows — direct pass-through from KbRepository.
-    val incidents:  StateFlow<List<KbIncident>>       = kbRepo.incidents
-    val nsi:        StateFlow<List<KbNsiEntry>>        = kbRepo.nsi
-    val tocDetails: StateFlow<Map<String, KbTocEntry>> = kbRepo.tocDetails
+    val incidents:       StateFlow<List<KbIncident>>        = kbRepo.incidents
+    val nsi:             StateFlow<List<KbNsiEntry>>         = kbRepo.nsi
+    val tocDetails:      StateFlow<Map<String, KbTocEntry>>  = kbRepo.tocDetails
+    val stationMessages: StateFlow<KbStationMessages?>       = kbRepo.stationMessages
 
     // ── Detail state ──────────────────────────────────────────────────────────
 
@@ -314,9 +315,10 @@ class MainViewModel : ViewModel() {
         lastBoardType = boardType
         doFetch()
         startAutoRefresh()
-        kbRepo.fetchIncidents()
+        kbRepo.fetchIncidents(newCrs)
         kbRepo.fetchNsi()
         kbRepo.fetchTocDetails()
+        kbRepo.fetchStationMessages(newCrs)
     }
 
     /** Manually re-fetches the board without changing the station or board type. */
@@ -419,6 +421,7 @@ class MainViewModel : ViewModel() {
     // directly into kbRepo, keeping the single-ViewModel contract intact.
 
     fun fetchNsi()       = kbRepo.fetchNsi()
+    fun fetchStationMessages(crs: String) = kbRepo.fetchStationMessages(crs)
     /** Returns the NSI status entry for the given ATOC operator code, or null. */
     fun nsiForOperator(operatorCode: String) = kbRepo.nsiForOperator(operatorCode)
 

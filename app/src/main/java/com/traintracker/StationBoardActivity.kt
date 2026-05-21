@@ -27,7 +27,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 @SuppressLint("SetTextI18n")
 class StationBoardActivity : AppCompatActivity() {
@@ -38,11 +37,6 @@ class StationBoardActivity : AppCompatActivity() {
 
     private var currentCrs = ""
     private var currentBoardType = BoardType.ALL
-
-
-
-    // Instance of KnowledgebaseService for station lookups
-    private val kbService = ServerApiClient()
 
     companion object {
         private const val EXTRA_CRS  = "crs"
@@ -80,6 +74,7 @@ class StationBoardActivity : AppCompatActivity() {
         observeState()
         observeIncidents()
         observeNsi()
+        observeStationMessages()
         observeNextService()
 
         binding.swipeRefresh.setOnRefreshListener {
@@ -90,53 +85,9 @@ class StationBoardActivity : AppCompatActivity() {
     }
 
 
-    // ── Station info dialog ───────────────────────────────────────────────────
+    // ── Station info ──────────────────────────────────────────────────────────
     private fun showStationInfoDialog(crs: String, name: String) {
-        lifecycleScope.launch {
-            val station = withContext(Dispatchers.IO) {
-                kbService.getKbStation(crs)
-            }
-            if (!isFinishing && !isDestroyed) {
-                if (station == null) {
-                    AlertDialog.Builder(this@StationBoardActivity)
-                        .setTitle("Station Information")
-                        .setMessage("No facility data available for this station.")
-                        .setPositiveButton("OK", null)
-                        .show()
-                    return@launch
-                }
-
-                val sb = StringBuilder()
-                fun row(label: String, value: String) {
-                    if (value.isNotEmpty()) sb.appendLine("$label: $value")
-                }
-
-                if (station.address.isNotEmpty()) sb.appendLine(station.address).appendLine()
-                row("Phone",          station.telephone)
-                row("Staffing",       station.staffingNote)
-                row("Ticket office",  station.ticketOfficeHours)
-                row("Ticket machine", station.sstmAvailability)
-                row("Step-free",      station.stepFreeAccess)
-                row("Assistance",     station.assistanceAvail)
-                row("WiFi",           station.wifi)
-                row("Toilets",        station.toilets)
-                row("Waiting room",   station.waitingRoom)
-                row("CCTV",           station.cctv)
-                row("Taxi",           station.taxi)
-                row("Bus interchange",station.busInterchange)
-                row("Car parking",    station.carParking)
-
-                val msg = sb.toString().trimEnd().ifEmpty {
-                    "No facility details available for $name."
-                }
-
-                AlertDialog.Builder(this@StationBoardActivity)
-                    .setTitle(name)
-                    .setMessage(msg)
-                    .setPositiveButton("OK", null)
-                    .show()
-            }
-        }
+        StationInfoActivity.start(this, crs, name)
     }
 
     // ── Tabs ──────────────────────────────────────────────────────────────────
@@ -561,6 +512,34 @@ class StationBoardActivity : AppCompatActivity() {
         dialog.show()
 
     }
+    // ── Station alerts banner ─────────────────────────────────────────────────
+    private fun observeStationMessages() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.stationMessages.collect { msg ->
+                    val banner = binding.stationAlertsBanner
+                    if (msg == null) { banner.visibility = View.GONE; return@collect }
+
+                    // Build a compact summary line for the banner
+                    val lines = mutableListOf<String>()
+                    msg.disruptions.forEach { d -> if (d.summary.isNotEmpty()) lines.add("⚠ ${d.summary}") }
+                    if (msg.stationAlerts.isNotEmpty()) lines.add("ℹ ${msg.stationAlerts.lines().first()}")
+
+                    if (lines.isEmpty()) { banner.visibility = View.GONE; return@collect }
+
+                    binding.tvStationAlertsText.text = lines.joinToString("\n")
+                    banner.visibility = View.VISIBLE
+
+                    // Tap anywhere on the banner to open full station info
+                    banner.setOnClickListener {
+                        StationInfoActivity.start(this@StationBoardActivity, currentCrs,
+                            supportActionBar?.title?.toString() ?: currentCrs)
+                    }
+                }
+            }
+        }
+    }
+
     private fun observeNextService() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {

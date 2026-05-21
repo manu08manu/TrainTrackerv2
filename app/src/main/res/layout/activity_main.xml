@@ -406,6 +406,40 @@
                 android:layout_marginTop="8dp"/>
         </LinearLayout>
 
+        <!-- Station alerts banner — shows disruptions/alerts for current station -->
+        <LinearLayout
+            android:id="@+id/stationAlertsBanner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:background="#FFF3E0"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="8dp"
+            android:gravity="center_vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/tvStationAlertsText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="12sp"
+                android:textColor="#BF360C"
+                android:maxLines="2"
+                android:ellipsize="end"/>
+
+            <TextView
+                android:id="@+id/tvStationAlertsMore"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="More ›"
+                android:textSize="12sp"
+                android:textColor="#BF360C"
+                android:textStyle="bold"
+                android:paddingStart="8dp"/>
+
+        </LinearLayout>
+
         <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
             android:id="@+id/swipeRefresh"
             android:layout_width="match_parent"

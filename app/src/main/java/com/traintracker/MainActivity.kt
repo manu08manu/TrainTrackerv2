@@ -52,7 +52,7 @@ class MainActivity : AppCompatActivity() {
     private var currentSearchMode = SearchMode.STATION
     private var currentUnit = ""
 
-    // ─── Permission launchers ──────────────────────────────────────────────────
+    // ─── Permission launchers ─────────────────────────────────────────────────
     private val locationPermissionRequest = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
@@ -61,7 +61,6 @@ class MainActivity : AppCompatActivity() {
             findNearestStation()
         }
     }
-
 
     // ─── onCreate ─────────────────────────────────────────────────────────────
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -93,6 +92,7 @@ class MainActivity : AppCompatActivity() {
         observeTick()
         observeRecentStations()
         observeHistoricDate()
+        observeStationMessages()
 
         val lastCrs = prefs.getString("last_crs", "") ?: ""
         if (lastCrs.isNotEmpty()) {
@@ -105,9 +105,7 @@ class MainActivity : AppCompatActivity() {
             updateFavouriteButton()
             search()
         }
-
     }
-
 
     // ─── Adapter ──────────────────────────────────────────────────────────────
     private fun setupAdapter() {
@@ -144,7 +142,7 @@ class MainActivity : AppCompatActivity() {
         binding.rvTrains.adapter = adapter
         binding.swipeRefresh.setOnRefreshListener {
             when (currentSearchMode) {
-                SearchMode.UNIT -> viewModel.fetchUnitBoard(currentUnit, onNotFound = {
+                SearchMode.UNIT     -> viewModel.fetchUnitBoard(currentUnit, onNotFound = {
                     binding.swipeRefresh.isRefreshing = false
                 })
                 SearchMode.HEADCODE -> viewModel.refresh()
@@ -200,11 +198,8 @@ class MainActivity : AppCompatActivity() {
         binding.btnFavourite.setOnClickListener {
             if (currentCrs.isEmpty()) return@setOnClickListener
             val station = StationData.findByCrs(currentCrs)
-            if (favManager.isFavourite(currentCrs)) {
-                favManager.remove(currentCrs)
-            } else {
-                favManager.add(currentCrs, station?.name ?: currentCrs)
-            }
+            if (favManager.isFavourite(currentCrs)) favManager.remove(currentCrs)
+            else favManager.add(currentCrs, station?.name ?: currentCrs)
             setupFavouriteChips()
             updateFavouriteButton()
         }
@@ -223,84 +218,52 @@ class MainActivity : AppCompatActivity() {
             )
         }
 
-        binding.btnHistory.setOnClickListener {
-            HspActivity.start(this)
-        }
+        binding.btnHistory.setOnClickListener { HspActivity.start(this) }
     }
 
     // ─── Filter chips ─────────────────────────────────────────────────────────
     private fun setupFilterChips() {
         binding.chipCallingAt.setOnClickListener { showCallingAtDialog() }
         binding.chipCallingAt.setOnCloseIconClickListener { viewModel.clearCallingAtFilter() }
-
         binding.chipOperator.setOnClickListener { showOperatorDialog() }
         binding.chipOperator.setOnCloseIconClickListener { viewModel.clearOperatorFilter() }
 
-        // Time navigation — ±30 min steps; long-press on label opens date picker
         binding.btnTimePrev.setOnClickListener { viewModel.setTimeOffset(viewModel.timeOffset.value - 30) }
         binding.btnTimeNext.setOnClickListener { viewModel.setTimeOffset(viewModel.timeOffset.value + 30) }
-        binding.tvTimeOffset.setOnClickListener  {
-            // Short tap: if on a historic date, go back to live; if live, reset offset to 0
-            if (viewModel.historicDate.value != null) {
-                viewModel.setHistoricDate(null)
-            } else {
-                viewModel.setTimeOffset(0)
-            }
+        binding.tvTimeOffset.setOnClickListener {
+            if (viewModel.historicDate.value != null) viewModel.setHistoricDate(null)
+            else viewModel.setTimeOffset(0)
         }
-        binding.tvTimeOffset.setOnLongClickListener {
-            showDatePickerDialog()
-            true
-        }
+        binding.tvTimeOffset.setOnLongClickListener { showDatePickerDialog(); true }
     }
 
     // ─── Date picker ──────────────────────────────────────────────────────────
     private fun showDatePickerDialog() {
         val cal = Calendar.getInstance()
-        // Start the picker on today and restrict to past dates only
-        val dpd = DatePickerDialog(
-            this,
-            { _, year, month, dayOfMonth ->
-                val today = Calendar.getInstance()
-                val selected = Calendar.getInstance().apply { set(year, month, dayOfMonth) }
-
-                // If today is selected, go back to live mode
-                if (selected.get(Calendar.YEAR)         == today.get(Calendar.YEAR) &&
-                    selected.get(Calendar.DAY_OF_YEAR)  == today.get(Calendar.DAY_OF_YEAR)) {
-                    viewModel.setHistoricDate(null)
-                } else {
-                    val dateStr = "%04d-%02d-%02d".format(year, month + 1, dayOfMonth)
-                    viewModel.setHistoricDate(dateStr)
-                }
-            },
-            cal.get(Calendar.YEAR),
-            cal.get(Calendar.MONTH),
-            cal.get(Calendar.DAY_OF_MONTH)
-        )
-        // Restrict to past dates only (today inclusive)
+        val dpd = DatePickerDialog(this, { _, year, month, dayOfMonth ->
+            val today    = Calendar.getInstance()
+            val selected = Calendar.getInstance().apply { set(year, month, dayOfMonth) }
+            if (selected.get(Calendar.YEAR)        == today.get(Calendar.YEAR) &&
+                selected.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR)) {
+                viewModel.setHistoricDate(null)
+            } else {
+                viewModel.setHistoricDate("%04d-%02d-%02d".format(year, month + 1, dayOfMonth))
+            }
+        }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH))
         dpd.datePicker.maxDate = System.currentTimeMillis()
-        // Restrict to roughly 2 years back (HSP data limit)
-        val minCal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -730) }
-        dpd.datePicker.minDate = minCal.timeInMillis
+        dpd.datePicker.minDate = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -730) }.timeInMillis
         dpd.setTitle("Select date (long-press time label = date picker)")
         dpd.show()
     }
 
-    // ─── Observer: historic date label ───────────────────────────────────────
+    // ─── Observer: historic date label ────────────────────────────────────────
     private fun observeHistoricDate() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.historicDate.collect { date ->
-                    if (date == null) {
-                        // Live mode — tvTimeOffset driven by observeFilterState
-                        binding.btnTimePrev.isEnabled = true
-                        binding.btnTimeNext.isEnabled = true
-                    } else {
-                        // Historic mode — show date in the time label
-                        binding.tvTimeOffset.text = formatHistoricDate(date)
-                        // Disable forward/back arrows in historic mode (use date picker instead)
-                        binding.btnTimePrev.isEnabled = false
-                        binding.btnTimeNext.isEnabled = false
-                    }
+                    binding.btnTimePrev.isEnabled = date == null
+                    binding.btnTimeNext.isEnabled = date == null
+                    if (date != null) binding.tvTimeOffset.text = formatHistoricDate(date)
                 }
             }
         }
@@ -308,10 +271,7 @@ class MainActivity : AppCompatActivity() {
 
     // ─── Calling-at dialog ────────────────────────────────────────────────────
     private fun showCallingAtDialog() {
-        val input = AutoCompleteTextView(this).apply {
-            hint = getString(R.string.search_hint)
-            threshold = 1
-        }
+        val input = AutoCompleteTextView(this).apply { hint = getString(R.string.search_hint); threshold = 1 }
         val autoAdapter = StationAutoCompleteAdapter()
         input.setAdapter(autoAdapter)
         input.addTextChangedListener(object : TextWatcher {
@@ -322,10 +282,7 @@ class MainActivity : AppCompatActivity() {
             }
         })
         val padding = (16 * resources.displayMetrics.density).toInt()
-        val container = FrameLayout(this).apply {
-            setPadding(padding, 8, padding, 0)
-            addView(input)
-        }
+        val container = FrameLayout(this).apply { setPadding(padding, 8, padding, 0); addView(input) }
         var selectedCrs = ""
         input.setOnItemClickListener { _, view, _, _ ->
             val text = (view as? TextView)?.text?.toString() ?: return@setOnItemClickListener
@@ -360,7 +317,7 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    // ─── Incidents dialog ─────────────────────────────────────────────────────
+    // ─── Incidents detail dialog ──────────────────────────────────────────────
     private fun showIncidentsDialog(incidents: List<KbIncident>) {
         if (incidents.isEmpty()) return
         val msg = incidents.joinToString("\n\n") { inc ->
@@ -372,7 +329,7 @@ class MainActivity : AppCompatActivity() {
                     append(inc.description.take(300))
                     if (inc.description.length > 300) append("…")
                 }
-                if (inc.endTime.isNotEmpty()) append("\nExpected clear: ${inc.endTime.take(16).replace('T',' ')}")
+                if (inc.endTime.isNotEmpty()) append("\nExpected clear: ${inc.endTime.take(16).replace('T', ' ')}")
             }
         }
         AlertDialog.Builder(this)
@@ -388,15 +345,11 @@ class MainActivity : AppCompatActivity() {
         val text = binding.etCrs.text.toString().trim()
         if (text.isEmpty()) return
         if (text.matches(Regex("[0-9][A-Z0-9]{3}", RegexOption.IGNORE_CASE))) {
-            searchByHeadcode(text.uppercase())
-            return
+            searchByHeadcode(text.uppercase()); return
         }
-        // Unit number: all digits (e.g. 375918) OR 2 letters + digits (e.g. HA14, NL13)
-        // but NOT a headcode (1 digit + 3 alphanumeric)
         if (text.matches(Regex("[0-9]{4,}", RegexOption.IGNORE_CASE)) ||
             text.matches(Regex("[A-Z]{2}[0-9]+", RegexOption.IGNORE_CASE))) {
-            searchByUnit(text.uppercase())
-            return
+            searchByUnit(text.uppercase()); return
         }
         if (text.length <= 5) {
             StationData.findByCrs(text.take(3))?.let { selectStation(it); return }
@@ -410,27 +363,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun searchByHeadcode(headcode: String) {
-        // Always go to headcode board — clear any existing station context
         currentSearchMode = SearchMode.HEADCODE
-        currentCrs = ""
         currentCrs = ""
         binding.btnDiagram.visibility = View.GONE
         binding.progressBar.visibility = View.VISIBLE
-        viewModel.fetchHeadcodeBoard(
-            headcode = headcode,
-            onNotFound = {
-                binding.progressBar.visibility = View.GONE
-                AlertDialog.Builder(this)
-                    .setTitle("Headcode not found")
-                    .setMessage("$headcode could not be located. It may not be running yet, or the server may not have data for it.")
-                    .setPositiveButton("OK", null)
-                    .show()
-            }
-        )
+        viewModel.fetchHeadcodeBoard(headcode = headcode, onNotFound = {
+            binding.progressBar.visibility = View.GONE
+            AlertDialog.Builder(this)
+                .setTitle("Headcode not found")
+                .setMessage("$headcode could not be located. It may not be running yet, or the server may not have data for it.")
+                .setPositiveButton("OK", null).show()
+        })
         binding.chipCallingAt.text = getString(R.string.filter_headcode, headcode)
         binding.chipCallingAt.isChecked = true
     }
-
 
     private fun searchByUnit(unit: String) {
         currentSearchMode = SearchMode.UNIT
@@ -439,17 +385,13 @@ class MainActivity : AppCompatActivity() {
         binding.etCrs.setText(unit.uppercase())
         binding.progressBar.visibility = View.VISIBLE
         viewModel.clearHeadcodeBoard()
-        viewModel.fetchUnitBoard(
-            unit = unit,
-            onNotFound = {
-                binding.progressBar.visibility = View.GONE
-                AlertDialog.Builder(this)
-                    .setTitle("Unit not found")
-                    .setMessage("$unit wasn't found in today's allocations.")
-                    .setPositiveButton("OK", null)
-                    .show()
-            }
-        )
+        viewModel.fetchUnitBoard(unit = unit, onNotFound = {
+            binding.progressBar.visibility = View.GONE
+            AlertDialog.Builder(this)
+                .setTitle("Unit not found")
+                .setMessage("$unit wasn't found in today's allocations.")
+                .setPositiveButton("OK", null).show()
+        })
         binding.chipCallingAt.text = getString(R.string.chip_unit_label, unit)
         binding.chipCallingAt.isChecked = true
     }
@@ -479,14 +421,11 @@ class MainActivity : AppCompatActivity() {
     // ─── GPS ──────────────────────────────────────────────────────────────────
     private fun requestLocationPermission() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-            == PackageManager.PERMISSION_GRANTED) {
-            findNearestStation()
-        } else {
-            locationPermissionRequest.launch(arrayOf(
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            ))
-        }
+            == PackageManager.PERMISSION_GRANTED) findNearestStation()
+        else locationPermissionRequest.launch(arrayOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        ))
     }
 
     private fun findNearestStation() {
@@ -500,9 +439,7 @@ class MainActivity : AppCompatActivity() {
                 if (nearest != null) { selectStation(nearest); toast(getString(R.string.nearest_station, nearest.name)) }
                 else toast(getString(R.string.no_station_found))
             } else toast(getString(R.string.location_unavailable))
-        } catch (_: SecurityException) {
-            toast(getString(R.string.location_not_granted))
-        }
+        } catch (_: SecurityException) { toast(getString(R.string.location_not_granted)) }
     }
 
     // ─── Favourites ───────────────────────────────────────────────────────────
@@ -524,9 +461,7 @@ class MainActivity : AppCompatActivity() {
                     updateFavouriteButton()
                     saveAndSearch()
                 }
-                setOnCloseIconClickListener {
-                    favManager.remove(crs); setupFavouriteChips(); updateFavouriteButton()
-                }
+                setOnCloseIconClickListener { favManager.remove(crs); setupFavouriteChips(); updateFavouriteButton() }
             }
             binding.chipGroupFavourites.addView(chip)
         }
@@ -564,7 +499,6 @@ class MainActivity : AppCompatActivity() {
                             binding.progressBar.visibility = View.GONE
                             binding.tvError.visibility     = View.GONE
                             binding.tvHeader.visibility    = View.VISIBLE
-                            // generatedAt holds the date string for historic boards
                             val genTime = state.board.generatedAt.take(16).replace('T', ' ')
                             binding.tvHeader.text = getString(
                                 R.string.board_header,
@@ -588,7 +522,7 @@ class MainActivity : AppCompatActivity() {
                                 binding.emptyState.visibility = View.GONE
                                 adapter.submitAll(state.board.services, state.board.stationName)
                             }
-                            showNrccMessages(state.board.nrccMessages)
+                            refreshIncidentsBanner(state.board.nrccMessages)
                         }
                         is UiState.Error -> {
                             binding.progressBar.visibility = View.GONE
@@ -603,7 +537,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-
 
     private fun observeUnitBoard() {
         lifecycleScope.launch {
@@ -625,12 +558,10 @@ class MainActivity : AppCompatActivity() {
                             binding.tvError.visibility     = View.GONE
                             binding.tvHeader.visibility    = View.VISIBLE
                             binding.tvHeader.text = state.board.stationName
-                            // Show diagram button and wire it up
                             binding.btnDiagram.visibility = View.VISIBLE
                             binding.btnDiagram.setOnClickListener {
-                                val intent = Intent(this@MainActivity, UnitDiagramActivity::class.java)
-                                intent.putExtra("unit", currentUnit)
-                                startActivity(intent)
+                                startActivity(Intent(this@MainActivity, UnitDiagramActivity::class.java)
+                                    .putExtra("unit", currentUnit))
                             }
                             if (state.board.services.isEmpty()) {
                                 binding.emptyState.visibility = View.VISIBLE
@@ -647,9 +578,7 @@ class MainActivity : AppCompatActivity() {
                             binding.tvError.visibility = View.VISIBLE
                             binding.btnDiagram.visibility = View.GONE
                         }
-                        else -> {
-                            binding.btnDiagram.visibility = View.GONE
-                        }
+                        else -> binding.btnDiagram.visibility = View.GONE
                     }
                 }
             }
@@ -660,8 +589,7 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.headcodeBoard.collect { state ->
-                    if (state == null) return@collect
-                    if (currentSearchMode != SearchMode.HEADCODE) return@collect
+                    if (state == null || currentSearchMode != SearchMode.HEADCODE) return@collect
                     binding.swipeRefresh.isRefreshing = false
                     when (state) {
                         is UiState.Loading -> {
@@ -697,8 +625,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-
-
     private fun observeFilterState() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -708,8 +634,7 @@ class MainActivity : AppCompatActivity() {
                             binding.chipCallingAt.text = getString(R.string.filter_calling_at)
                             binding.chipCallingAt.isCloseIconVisible = false
                         } else {
-                            val name = StationData.findByCrs(crs)?.name ?: crs
-                            binding.chipCallingAt.text = getString(R.string.filter_calling_at_active, name)
+                            binding.chipCallingAt.text = getString(R.string.filter_calling_at_active, StationData.findByCrs(crs)?.name ?: crs)
                             binding.chipCallingAt.isCloseIconVisible = true
                         }
                     }
@@ -727,7 +652,6 @@ class MainActivity : AppCompatActivity() {
                 }
                 launch {
                     viewModel.timeOffset.collect { offset ->
-                        // Only update the label when not in historic mode
                         if (viewModel.historicDate.value == null) {
                             binding.tvTimeOffset.text = when {
                                 offset == 0 -> getString(R.string.time_now)
@@ -757,38 +681,25 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ─── Incidents banner ─────────────────────────────────────────────────────
-    private var currentNrccMessages: List<String> = emptyList()
-
-    private fun showNrccMessages(messages: List<String>) {
-        currentNrccMessages = messages
-        refreshBanner()
-    }
-
-    private fun refreshBanner() {
-        val nrcc = currentNrccMessages
+    // ─── Incidents banner (NRCC + KB incidents) ───────────────────────────────
+    // Single function replaces the old showNrccMessages + refreshBanner split.
+    private fun refreshIncidentsBanner(nrccMessages: List<String> = emptyList()) {
         val boardOps = (viewModel.uiState.value as? UiState.Success)
             ?.board?.services?.map { it.operatorCode }?.toSet() ?: emptySet()
-        val allIncidents = viewModel.incidents.value
-        val kbIncidents = if (boardOps.isEmpty()) allIncidents
-        else allIncidents.filter { inc -> inc.operators.isEmpty() || inc.operators.any { it in boardOps } }
-
-        val allMessages: List<String> = nrcc + kbIncidents.map { it.summary }
-        if (allMessages.isEmpty()) {
-            binding.bannerIncidents.visibility = View.GONE
-            return
+        val kbIncidents = viewModel.incidents.value.filter { inc ->
+            inc.operators.isEmpty() || boardOps.isEmpty() || inc.operators.any { it in boardOps }
         }
+        val allMessages = nrccMessages + kbIncidents.map { it.summary }
+        if (allMessages.isEmpty()) { binding.bannerIncidents.visibility = View.GONE; return }
+
         binding.bannerIncidents.visibility = View.VISIBLE
         binding.tvBannerSummary.text = allMessages.first()
         val extra = allMessages.size - 1
-        if (extra > 0) {
-            binding.tvBannerMore.text = resources.getQuantityString(R.plurals.banner_more_incidents, extra, extra)
-            binding.tvBannerMore.visibility = View.VISIBLE
-        } else {
-            binding.tvBannerMore.visibility = View.GONE
-        }
+        binding.tvBannerMore.text = if (extra > 0)
+            resources.getQuantityString(R.plurals.banner_more_incidents, extra, extra) else ""
+        binding.tvBannerMore.visibility = if (extra > 0) View.VISIBLE else View.GONE
         binding.bannerIncidents.setOnClickListener {
-            val nrccAsIncidents = nrcc.map { msg ->
+            val nrccAsIncidents = nrccMessages.map { msg ->
                 KbIncident(id = "nrcc", summary = msg, description = "", startTime = "",
                     endTime = "", operators = emptyList(), isPlanned = false)
             }
@@ -799,17 +710,42 @@ class MainActivity : AppCompatActivity() {
     private fun observeIncidents() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.incidents.collect { refreshBanner() }
+                viewModel.incidents.collect { refreshIncidentsBanner() }
             }
         }
     }
 
-    // ─── NSI status dots ──────────────────────────────────────────────────────
+    // ─── Station alerts banner ────────────────────────────────────────────────
+    private fun observeStationMessages() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.stationMessages.collect { msg ->
+                    val banner = binding.stationAlertsBanner
+                    if (msg == null) { banner.visibility = View.GONE; return@collect }
+
+                    val lines = mutableListOf<String>()
+                    msg.disruptions.forEach { d -> if (d.summary.isNotEmpty()) lines.add("⚠ ${d.summary}") }
+                    if (msg.stationAlerts.isNotEmpty()) lines.add("ℹ ${msg.stationAlerts.lines().first()}")
+
+                    if (lines.isEmpty()) { banner.visibility = View.GONE; return@collect }
+
+                    binding.tvStationAlertsText.text = lines.joinToString("\n")
+                    banner.visibility = View.VISIBLE
+                    banner.setOnClickListener {
+                        val name = StationData.findByCrs(currentCrs)?.name ?: currentCrs
+                        StationInfoActivity.start(this@MainActivity, currentCrs, name)
+                    }
+                }
+            }
+        }
+    }
+
+    // ─── NSI ──────────────────────────────────────────────────────────────────
     private fun observeNsi() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.nsi.collect {
-                    adapter.nsiLookup      = { code -> viewModel.nsiForOperator(code) }
+                    adapter.nsiLookup       = { code -> viewModel.nsiForOperator(code) }
                     adapter.tocDetailLookup = { code -> viewModel.tocDetails.value[code.uppercase()] }
                 }
             }
@@ -820,20 +756,16 @@ class MainActivity : AppCompatActivity() {
     private fun observeTick() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.tick.collect {
-                    adapter.notifyTick()
-                }
+                viewModel.tick.collect { adapter.notifyTick() }
             }
         }
     }
 
-    // ─── Recent stations observer ─────────────────────────────────────────────
+    // ─── Recent stations ──────────────────────────────────────────────────────
     private fun observeRecentStations() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.recentStations.collect { recents ->
-                    buildRecentChips(recents)
-                }
+                viewModel.recentStations.collect { recents -> buildRecentChips(recents) }
             }
         }
     }
@@ -862,9 +794,7 @@ class MainActivity : AppCompatActivity() {
                     updateFavouriteButton()
                     saveAndSearch()
                 }
-                setOnCloseIconClickListener {
-                    viewModel.clearRecentStation(recent.crs)
-                }
+                setOnCloseIconClickListener { viewModel.clearRecentStation(recent.crs) }
             }
             binding.chipGroupRecents.addView(chip)
         }
@@ -883,19 +813,14 @@ class MainActivity : AppCompatActivity() {
 class StationAutoCompleteAdapter : BaseAdapter(), Filterable {
     private var items: List<Station> = emptyList()
 
-    fun updateItems(new: List<Station>) {
-        items = new
-        notifyDataSetChanged()
-    }
+    fun updateItems(new: List<Station>) { items = new; notifyDataSetChanged() }
 
     override fun getCount() = items.size
     override fun getItem(pos: Int) = items[pos]
     override fun getItemId(pos: Int) = pos.toLong()
 
     override fun getView(pos: Int, convertView: View?, parent: ViewGroup): View {
-        val tv = (convertView as? TextView) ?: TextView(parent.context).apply {
-            setPadding(32, 24, 32, 24)
-        }
+        val tv = (convertView as? TextView) ?: TextView(parent.context).apply { setPadding(32, 24, 32, 24) }
         val s = items[pos]
         tv.text = tv.context.getString(R.string.station_name_crs, s.name, s.crs)
         return tv

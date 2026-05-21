@@ -52,21 +52,29 @@ class KbRepository(
      */
     val tocDetails: StateFlow<Map<String, KbTocEntry>> = _tocDetails.asStateFlow()
 
+    private val _stationMessages = MutableStateFlow<KbStationMessages?>(null)
+    /** Station-specific disruptions and alerts for the current board CRS. */
+    val stationMessages: StateFlow<KbStationMessages?> = _stationMessages.asStateFlow()
+
     // Timestamps used for TTL enforcement.
-    private var incidentsFetchedAt = 0L
-    private var nsiFetchedAt       = 0L
+    private var incidentsFetchedAt   = 0L
+    private var incidentsCrs         = ""
+    private var nsiFetchedAt         = 0L
+    private var stationMsgFetchedAt  = 0L
+    private var stationMsgCrs        = ""
 
     /**
-     * Fetches live incidents from the KB proxy, unless the cached copy is
-     * less than 5 minutes old.  Failures are silently swallowed — stale or
-     * absent incident banners are a graceful degradation, not an error.
+     * Fetches live incidents from the KB proxy for [crs], unless the cached copy is
+     * less than 5 minutes old for the same station.  Failures are silently swallowed.
      */
-    fun fetchIncidents() {
-        if (System.currentTimeMillis() - incidentsFetchedAt < ttlMs) return
+    fun fetchIncidents(crs: String = "") {
+        val now = System.currentTimeMillis()
+        if (crs == incidentsCrs && now - incidentsFetchedAt < ttlMs) return
         scope.launch {
             try {
-                _incidents.value = withContext(Dispatchers.IO) { server.getKbIncidents() }
+                _incidents.value = withContext(Dispatchers.IO) { server.getKbIncidents(crs) }
                 incidentsFetchedAt = System.currentTimeMillis()
+                incidentsCrs = crs
             } catch (_: Exception) { /* non-critical — board still shows without banner */ }
         }
     }
@@ -107,5 +115,24 @@ class KbRepository(
     fun nsiForOperator(operatorCode: String): KbNsiEntry? {
         if (operatorCode.isEmpty()) return null
         return _nsi.value.firstOrNull { it.tocCode.equals(operatorCode, ignoreCase = true) }
+    }
+
+    /**
+     * Fetches station-specific disruptions and alerts for [crs].
+     * Cached for 5 minutes; invalidated immediately when the CRS changes.
+     */
+    fun fetchStationMessages(crs: String) {
+        if (crs.isEmpty()) return
+        val now = System.currentTimeMillis()
+        if (crs == stationMsgCrs && now - stationMsgFetchedAt < ttlMs) return
+        // Clear stale data immediately when switching stations
+        if (crs != stationMsgCrs) _stationMessages.value = null
+        scope.launch {
+            try {
+                _stationMessages.value = withContext(Dispatchers.IO) { server.getKbStationMessages(crs) }
+                stationMsgFetchedAt = System.currentTimeMillis()
+                stationMsgCrs = crs
+            } catch (_: Exception) { /* non-critical */ }
+        }
     }
 }

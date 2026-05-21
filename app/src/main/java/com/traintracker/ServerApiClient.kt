@@ -375,9 +375,10 @@ class ServerApiClient {
     }
 
 
-    suspend fun getKbIncidents(): List<KbIncident> = withContext(Dispatchers.IO) {
+    suspend fun getKbIncidents(crs: String = ""): List<KbIncident> = withContext(Dispatchers.IO) {
         try {
-            val arr = JSONArray(getRaw("/api/kb/incidents") ?: return@withContext emptyList())
+            val path = if (crs.isNotEmpty()) "/api/kb/incidents?crs=${crs.uppercase()}" else "/api/kb/incidents"
+            val arr = JSONArray(getRaw(path) ?: return@withContext emptyList())
             (0 until arr.length()).mapNotNull { i ->
                 val o = arr.optJSONObject(i) ?: return@mapNotNull null
                 val ops = o.optJSONArray("operators")?.let { a ->
@@ -443,24 +444,70 @@ class ServerApiClient {
         try {
             val o = get("/api/kb/station/${crs.uppercase()}") ?: return@withContext null
             KbStation(
-                crs               = o.optString("crs"),
-                name              = o.optString("name"),
-                address           = o.optString("address"),
-                telephone         = o.optString("telephone"),
-                staffingNote      = o.optString("staffingNote"),
-                ticketOfficeHours = o.optString("ticketOfficeHours"),
-                sstmAvailability  = o.optString("sstmAvailability"),
-                stepFreeAccess    = o.optString("stepFreeAccess"),
-                assistanceAvail   = o.optString("assistanceAvail"),
-                wifi              = o.optString("wifi"),
-                toilets           = o.optString("toilets"),
-                waitingRoom       = o.optString("waitingRoom"),
-                cctv              = o.optString("cctv"),
-                taxi              = o.optString("taxi"),
-                busInterchange    = "",
-                carParking        = o.optString("carParking")
+                crs                      = o.optString("crs"),
+                name                     = o.optString("name"),
+                address                  = o.optString("address"),
+                staffingNote             = o.optString("staffingNote"),
+                ticketOfficeHours        = o.optString("ticketOfficeHours"),
+                sstmAvailability         = o.optString("sstmAvailability"),
+                stepFreeAccess           = o.optString("stepFreeAccess"),
+                assistanceAvail          = o.optString("assistanceAvail"),
+                inductionLoop            = o.optString("inductionLoop"),
+                accessibleTicketMachines = o.optString("accessibleTicketMachines"),
+                rampForTrainAccess       = o.optString("rampForTrainAccess"),
+                wheelchairsAvailable     = o.optString("wheelchairsAvailable"),
+                nationalKeyToilets       = o.optString("nationalKeyToilets"),
+                ticketGates              = o.optString("ticketGates"),
+                wifi                     = o.optString("wifi"),
+                toilets                  = o.optString("toilets"),
+                waitingRoom              = o.optString("waitingRoom"),
+                cctv                     = o.optString("cctv"),
+                babyChange               = o.optString("babyChange"),
+                seatedArea               = o.optString("seatedArea"),
+                trolleys                 = o.optString("trolleys"),
+                leftLuggage              = o.optString("leftLuggage"),
+                stationBuffet            = o.optString("stationBuffet"),
+                showers                  = o.optString("showers"),
+                atmMachine               = o.optString("atmMachine"),
+                firstClassLounge         = o.optString("firstClassLounge"),
+                customerHelpPoints       = o.optString("customerHelpPoints"),
+                impairedMobilitySetDown  = o.optString("impairedMobilitySetDown"),
+                taxi                     = o.optString("taxi"),
+                busInterchange           = o.optString("busInterchange"),
+                airport                  = o.optString("airport"),
+                carParking               = o.optString("carParking"),
+                carParkName              = o.optString("carParkName"),
+                cycleSpaces              = o.optString("cycleSpaces"),
+                cycleSheltered           = o.optString("cycleSheltered")
             )
         } catch (e: Exception) { Log.w(TAG, "getKbStation: ${e.message}"); null }
+    }
+
+    suspend fun getKbStationMessages(crs: String): KbStationMessages? = withContext(Dispatchers.IO) {
+        try {
+            val o = get("/api/kb/station-messages?crs=${crs.uppercase()}") ?: return@withContext null
+            val disArr = o.optJSONArray("disruptions")
+            val disruptions = if (disArr != null) {
+                (0 until disArr.length()).mapNotNull { i ->
+                    val d = disArr.optJSONObject(i) ?: return@mapNotNull null
+                    val summary = d.optString("summary")
+                    if (summary.isEmpty()) return@mapNotNull null   // skip blank entries
+                    KbStationDisruption(
+                        category    = d.optString("category"),
+                        severity    = d.optString("severity"),
+                        summary     = summary,
+                        description = d.optString("description")
+                    )
+                }
+            } else emptyList()
+            val alerts = o.optString("stationAlerts")
+            if (disruptions.isEmpty() && alerts.isEmpty()) return@withContext null
+            KbStationMessages(
+                crs           = o.optString("crs"),
+                disruptions   = disruptions,
+                stationAlerts = alerts
+            )
+        } catch (e: Exception) { Log.w(TAG, "getKbStationMessages: ${e.message}"); null }
     }
 
     private fun fetchMovements(headcode: String, uid: String = ""): List<TrustMovement> {
@@ -719,19 +766,38 @@ data class KbStation(
     val crs: String,
     val name: String,
     val address: String,
-    val telephone: String,
     val staffingNote: String,
     val ticketOfficeHours: String,
     val sstmAvailability: String,
     val stepFreeAccess: String,
     val assistanceAvail: String,
+    val inductionLoop: String,
+    val accessibleTicketMachines: String,
+    val rampForTrainAccess: String,
+    val wheelchairsAvailable: String,
+    val nationalKeyToilets: String,
+    val ticketGates: String,
     val wifi: String,
     val toilets: String,
     val waitingRoom: String,
     val cctv: String,
+    val babyChange: String,
+    val seatedArea: String,
+    val trolleys: String,
+    val leftLuggage: String,
+    val stationBuffet: String,
+    val showers: String,
+    val atmMachine: String,
+    val firstClassLounge: String,
+    val customerHelpPoints: String,
+    val impairedMobilitySetDown: String,
     val taxi: String,
     val busInterchange: String,
-    val carParking: String
+    val airport: String,
+    val carParking: String,
+    val carParkName: String,
+    val cycleSpaces: String,
+    val cycleSheltered: String
 )
 
 data class KbTocEntry(
@@ -742,4 +808,17 @@ data class KbTocEntry(
     val assistedTravelPhone: String = "",
     val assistedTravelUrl: String = "",
     val lostPropertyUrl: String = ""
+)
+
+data class KbStationDisruption(
+    val category: String,
+    val severity: String,
+    val summary: String,
+    val description: String
+)
+
+data class KbStationMessages(
+    val crs: String,
+    val disruptions: List<KbStationDisruption>,
+    val stationAlerts: String
 )

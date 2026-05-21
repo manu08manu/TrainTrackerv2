@@ -283,14 +283,16 @@ class BoardRepository(
         //  • If the server gave us an actual time, use it (train has already moved).
         //  • Otherwise keep the existing estimate or default "On time".
         val etd = when {
-            bType == BoardType.ARRIVALS -> existing?.etd ?: "On time"
-            s.actualTime.isNotEmpty()   -> s.actualTime
-            else                        -> existing?.etd ?: "On time"
+            bType == BoardType.ARRIVALS                          -> existing?.etd ?: "On time"
+            s.actualTime.isNotEmpty()                            -> s.actualTime
+            existing?.actualDeparture?.isNotEmpty() == true     -> "On time"  // stale departed entry — don't inherit
+            else                                                 -> existing?.etd ?: "On time"
         }
         val eta = when {
-            bType != BoardType.ARRIVALS -> existing?.eta ?: "On time"
-            s.actualTime.isNotEmpty()   -> s.actualTime
-            else                        -> existing?.eta ?: "On time"
+            bType != BoardType.ARRIVALS                          -> existing?.eta ?: "On time"
+            s.actualTime.isNotEmpty()                            -> s.actualTime
+            existing?.actualArrival?.isNotEmpty() == true        -> "On time"  // stale arrived entry — don't inherit
+            else                                                 -> existing?.eta ?: "On time"
         }
 
         return TrainService(
