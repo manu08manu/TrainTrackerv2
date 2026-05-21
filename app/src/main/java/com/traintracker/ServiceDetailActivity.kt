@@ -685,21 +685,7 @@ class ServiceDetailActivity : AppCompatActivity() {
 
         // Show/hide overall cancellation banner
         // Prefer CIF points (full route) over board points (may only cover part of route)
-        val subsForCanc = d.cifSubsequentCallingPoints.ifEmpty { d.subsequentCallingPoints }
-        val allSubsCanc = subsForCanc.isNotEmpty() &&
-                subsForCanc.all {
-                    it.isCancelled || it.et.equals("Cancelled", ignoreCase = true)
-                }
-        val someSubsCanc = !allSubsCanc && subsForCanc.any {
-            it.isCancelled || it.et.equals("Cancelled", ignoreCase = true)
-        }
-        val partialCanc1 = !live.isCancelled && !d.isCancelled && someSubsCanc
-        binding.tvCancelledBanner.text = getString(
-            if (partialCanc1) R.string.service_partially_cancelled_banner
-            else R.string.service_cancelled_banner
-        )
-        binding.tvCancelledBanner.visibility =
-            if (live.isCancelled || d.isCancelled || allSubsCanc || someSubsCanc) View.VISIBLE else View.GONE
+        updateCancellationBanner(d, live.isCancelled)
     }
 
     private fun buildPointList(d: ServiceDetails): List<CallingPoint> {
@@ -845,20 +831,7 @@ class ServiceDetailActivity : AppCompatActivity() {
         binding.tvReason.text = reason
         binding.tvReason.visibility = if (reason.isNotEmpty()) View.VISIBLE else View.GONE
 
-        val allSubsCanc = d.subsequentCallingPoints.isNotEmpty()
-                && d.subsequentCallingPoints.all {
-            it.isCancelled || it.et.equals("Cancelled", ignoreCase = true)
-        }
-        val someSubsCanc = !allSubsCanc && d.subsequentCallingPoints.any {
-            it.isCancelled || it.et.equals("Cancelled", ignoreCase = true)
-        }
-        val partialCanc2 = !d.isCancelled && someSubsCanc
-        binding.tvCancelledBanner.text = getString(
-            if (partialCanc2) R.string.service_partially_cancelled_banner
-            else R.string.service_cancelled_banner
-        )
-        binding.tvCancelledBanner.visibility =
-            if (d.isCancelled || allSubsCanc || someSubsCanc) View.VISIBLE else View.GONE
+        updateCancellationBanner(d)
 
         // Split station info in unit card — coach-count-per-destination shown via bindUnitInfo
         if (splitTiploc.isNotEmpty()) {
@@ -915,6 +888,28 @@ class ServiceDetailActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    // ── Cancellation banner ───────────────────────────────────────────────────
+
+    private fun updateCancellationBanner(d: ServiceDetails, liveIsCancelled: Boolean = false) {
+        val allCps = (d.cifPreviousCallingPoints.ifEmpty { d.previousCallingPoints }) +
+                (d.cifSubsequentCallingPoints.ifEmpty { d.subsequentCallingPoints })
+        val allCanc = allCps.isNotEmpty() && allCps.all {
+            it.isCancelled || it.et.equals("Cancelled", ignoreCase = true)
+        }
+        val someCanc = !allCanc && allCps.any {
+            it.isCancelled || it.et.equals("Cancelled", ignoreCase = true)
+        }
+        // If CIF data not yet loaded, fall back to board-level cancellation flag
+        val boardCanc = allCps.isEmpty() && (liveIsCancelled || d.isCancelled)
+        val isPartial = !liveIsCancelled && !d.isCancelled && someCanc
+        binding.tvCancelledBanner.text = getString(
+            if (isPartial) R.string.service_partially_cancelled_banner
+            else R.string.service_cancelled_banner
+        )
+        binding.tvCancelledBanner.visibility =
+            if (liveIsCancelled || d.isCancelled || allCanc || someCanc || boardCanc) View.VISIBLE else View.GONE
     }
 
     // ── Share ─────────────────────────────────────────────────────────────────

@@ -199,10 +199,12 @@ class ServerApiClient {
             try {
                 val json = get("/api/service/$uid?crs=$atCrs") ?: return@withContext null
                 CallingPointsResult(
-                    uid         = json.optString("uid"),
-                    previous    = parseCallingPoints(json.optJSONArray("previous")),
-                    subsequent  = parseCallingPoints(json.optJSONArray("subsequent")),
-                    serviceType = json.optString("serviceType", "NORMAL")
+                    uid                  = json.optString("uid"),
+                    previous             = parseCallingPoints(json.optJSONArray("previous")),
+                    subsequent           = parseCallingPoints(json.optJSONArray("subsequent")),
+                    serviceType          = json.optString("serviceType", "NORMAL"),
+                    isPartiallyCancelled = json.optBoolean("isPartiallyCancelled", false),
+                    cancelReason         = json.optString("cancelReason", "").takeIf { it.isNotEmpty() && it != "null" } ?: ""
                 )
             } catch (_: Exception) { null }
         }
@@ -671,7 +673,9 @@ data class CallingPointsResult(
     val uid: String,
     val previous: List<CallingPoint>,
     val subsequent: List<CallingPoint>,
-    val serviceType: String = "NORMAL"
+    val serviceType: String = "NORMAL",
+    val isPartiallyCancelled: Boolean = false,
+    val cancelReason: String = ""
 )
 
 data class AllocationInfo(

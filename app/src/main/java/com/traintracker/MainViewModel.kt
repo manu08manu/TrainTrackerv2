@@ -483,7 +483,8 @@ class MainViewModel : ViewModel() {
                     }
 
                     fallback.copy(
-                        isCancelled = false,
+                        isCancelled = if (serverResult.isPartiallyCancelled) false else fallback.isCancelled,
+                        cancelReason = serverResult.cancelReason.ifEmpty { fallback.cancelReason },
                         serviceType = when (serverResult.serviceType) {
                             // Darwin reports replacement buses differently from the board API.
                             "BUS_REPLACEMENT", "COACH_REPLACEMENT" -> "bus"

@@ -273,7 +273,7 @@ class BoardRepository(
         // Prefer formation from cache (set when detail screen was opened for this
         // headcode) over whatever the existing board entry recorded.
         val formation    = formationCache.get(h) ?: formationCache.get(s.uid.uppercase())
-        val units        = formation?.units ?: existing?.units ?: emptyList()
+        val units        = formation?.units ?: s.units.takeIf { it.isNotEmpty() } ?: existing?.units ?: emptyList()
         val coaches      = formation?.coachCount ?: existing?.darwinCoachCount ?: 0
 
         val actualDep = if (bType != BoardType.ARRIVALS && s.actualTime.isNotEmpty()) s.actualTime else ""
